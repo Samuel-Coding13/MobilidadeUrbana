@@ -2,16 +2,40 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- 📸 Permissões necessárias para escolher imagem da galeria -->
-    <!-- Android 13+ -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <!-- Android 12 e anteriores -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- ========================================
+         PERMISSÕES NECESSÁRIAS
+         ======================================== -->
 
+    <!-- Permissão para acessar a internet -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Permissão para acessar o estado da rede -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Permissão para escrever no armazenamento (cache de mapas) -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32"
+        tools:ignore="ScopedStorage" />
+
+    <!-- Permissão para ler do armazenamento -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
+    <!-- Permissões de localização -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- Permissão para acessar localização em background (Android 10+) -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
+    <!-- Features necessárias -->
+    <uses-feature
+        android:name="android.hardware.location.gps"
+        android:required="false" />
+
+    <uses-feature
+        android:name="android.hardware.location.network"
+        android:required="false" />
 
     <application
         android:name=".MyApp"
@@ -23,18 +47,29 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MobilidadeUrbana"
+        android:usesCleartextTraffic="true"
         tools:targetApi="31">
 
+        <!-- Activity principal -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/Theme.MobilidadeUrbana">
+            android:theme="@style/Theme.MobilidadeUrbana"
+            android:windowSoftInputMode="adjustResize"
+            android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Metadata do Google Maps (se usar futuramente) -->
+        <!-- Descomente e adicione sua API Key se usar Google Maps
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="SUA_API_KEY_AQUI" />
+        -->
 
     </application>
 
