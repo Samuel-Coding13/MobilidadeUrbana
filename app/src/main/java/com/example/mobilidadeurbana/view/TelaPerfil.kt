@@ -4,22 +4,17 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.mobilidadeurbana.R
-import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -30,17 +25,6 @@ fun TelaPerfil(onBack: () -> Unit) {
     // CORES AZUIS
     val azulPrincipal = Color(0xFF0066FF)
     val azulEscuro = Color(0xFF003366)
-
-    var showChangePasswordDialog by remember { mutableStateOf(false) }
-    var senhaAtual by rememberSaveable { mutableStateOf("") }
-    var novaSenha by rememberSaveable { mutableStateOf("") }
-    var confirmarNovaSenha by rememberSaveable { mutableStateOf("") }
-    var mensagem by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(false) }
-
-    var senhaAtualVisivel by rememberSaveable { mutableStateOf(false) }
-    var novaSenhaVisivel by rememberSaveable { mutableStateOf(false) }
-    var confirmarSenhaVisivel by rememberSaveable { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -105,185 +89,48 @@ fun TelaPerfil(onBack: () -> Unit) {
                         Text("Email: ", fontWeight = FontWeight.Bold, color = azulEscuro)
                         Text(user?.email ?: "—", color = Color.Gray)
                     }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("UID: ", fontWeight = FontWeight.Bold, color = azulEscuro)
+                        Text(
+                            user?.uid?.take(20) ?: "—",
+                            color = Color.Gray,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                 }
             }
 
             Spacer(Modifier.height(24.dp))
 
-            Button(
-                onClick = { showChangePasswordDialog = true },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = azulPrincipal)
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = azulPrincipal.copy(alpha = 0.1f)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                shape = MaterialTheme.shapes.large
             ) {
-                Text("Alterar Senha", fontWeight = FontWeight.Bold)
-            }
-
-            if (mensagem.isNotEmpty()) {
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    text = mensagem,
-                    color = if (mensagem.contains("sucesso", true))
-                        Color(0xFF00C853)
-                    else
-                        MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-        }
-    }
-
-    if (showChangePasswordDialog) {
-        AlertDialog(
-            onDismissRequest = {
-                if (!isLoading) {
-                    showChangePasswordDialog = false
-                    senhaAtual = ""
-                    novaSenha = ""
-                    confirmarNovaSenha = ""
-                    mensagem = ""
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        when {
-                            senhaAtual.isEmpty() || novaSenha.isEmpty() || confirmarNovaSenha.isEmpty() -> {
-                                mensagem = "Preencha todos os campos."
-                            }
-                            novaSenha != confirmarNovaSenha -> {
-                                mensagem = "As senhas não coincidem."
-                            }
-                            novaSenha.length < 6 -> {
-                                mensagem = "A senha deve ter pelo menos 6 caracteres."
-                            }
-                            else -> {
-                                isLoading = true
-                                val email = user?.email
-                                if (email != null) {
-                                    val credential = EmailAuthProvider.getCredential(email, senhaAtual)
-                                    user.reauthenticate(credential)
-                                        .addOnSuccessListener {
-                                            user.updatePassword(novaSenha)
-                                                .addOnSuccessListener {
-                                                    mensagem = "Senha alterada com sucesso!"
-                                                    isLoading = false
-                                                    senhaAtual = ""
-                                                    novaSenha = ""
-                                                    confirmarNovaSenha = ""
-                                                    showChangePasswordDialog = false
-                                                }
-                                                .addOnFailureListener { e ->
-                                                    mensagem = "Erro ao alterar senha: ${e.message}"
-                                                    isLoading = false
-                                                }
-                                        }
-                                        .addOnFailureListener { e ->
-                                            mensagem = "Senha atual incorreta."
-                                            isLoading = false
-                                        }
-                                } else {
-                                    mensagem = "Erro: usuário não autenticado."
-                                    isLoading = false
-                                }
-                            }
-                        }
-                    },
-                    enabled = !isLoading
+                Column(
+                    modifier = Modifier.padding(16.dp)
                 ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                            color = azulPrincipal
+                    Text(
+                        "Status da Conta",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = azulEscuro
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Email verificado: ", color = azulEscuro)
+                        Text(
+                            if (user?.isEmailVerified == true) "Sim ✓" else "Não",
+                            color = if (user?.isEmailVerified == true) Color(0xFF00C853) else Color(0xFFD50000),
+                            fontWeight = FontWeight.Bold
                         )
-                    } else {
-                        Text("Alterar", color = azulPrincipal)
                     }
                 }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        showChangePasswordDialog = false
-                        senhaAtual = ""
-                        novaSenha = ""
-                        confirmarNovaSenha = ""
-                        mensagem = ""
-                    },
-                    enabled = !isLoading
-                ) {
-                    Text("Cancelar", color = Color.Gray)
-                }
-            },
-            title = {
-                Text("Alterar Senha", color = azulEscuro, fontWeight = FontWeight.Bold)
-            },
-            text = {
-                Column {
-                    Text("Preencha os campos abaixo para alterar sua senha:")
-                    Spacer(Modifier.height(16.dp))
-
-                    OutlinedTextField(
-                        value = senhaAtual,
-                        onValueChange = { senhaAtual = it },
-                        label = { Text("Senha atual") },
-                        visualTransformation = if (senhaAtualVisivel) VisualTransformation.None else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            IconButton(onClick = { senhaAtualVisivel = !senhaAtualVisivel }) {
-                                Icon(
-                                    imageVector = if (senhaAtualVisivel) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                    contentDescription = if (senhaAtualVisivel) "Ocultar" else "Mostrar"
-                                )
-                            }
-                        },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !isLoading
-                    )
-
-                    Spacer(Modifier.height(12.dp))
-
-                    OutlinedTextField(
-                        value = novaSenha,
-                        onValueChange = { novaSenha = it },
-                        label = { Text("Nova senha") },
-                        visualTransformation = if (novaSenhaVisivel) VisualTransformation.None else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            IconButton(onClick = { novaSenhaVisivel = !novaSenhaVisivel }) {
-                                Icon(
-                                    imageVector = if (novaSenhaVisivel) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                    contentDescription = if (novaSenhaVisivel) "Ocultar" else "Mostrar"
-                                )
-                            }
-                        },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !isLoading
-                    )
-
-                    Spacer(Modifier.height(12.dp))
-
-                    OutlinedTextField(
-                        value = confirmarNovaSenha,
-                        onValueChange = { confirmarNovaSenha = it },
-                        label = { Text("Confirmar nova senha") },
-                        visualTransformation = if (confirmarSenhaVisivel) VisualTransformation.None else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            IconButton(onClick = { confirmarSenhaVisivel = !confirmarSenhaVisivel }) {
-                                Icon(
-                                    imageVector = if (confirmarSenhaVisivel) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                    contentDescription = if (confirmarSenhaVisivel) "Ocultar" else "Mostrar"
-                                )
-                            }
-                        },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !isLoading
-                    )
-                }
             }
-        )
+        }
     }
 }

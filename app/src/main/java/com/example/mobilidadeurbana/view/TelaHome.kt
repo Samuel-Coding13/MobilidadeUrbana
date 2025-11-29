@@ -9,6 +9,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -30,6 +31,7 @@ import org.osmdroid.config.Configuration
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("MissingPermission")
@@ -184,6 +186,24 @@ fun TelaHome(onLogout: () -> Unit, navController: NavController) {
 
                 Spacer(Modifier.height(16.dp))
 
+                val lat = currentLocation?.latitude?.roundToInt()?.toString() ?: "—"
+                val lon = currentLocation?.longitude?.roundToInt()?.toString() ?: "—"
+                Card(
+                    modifier = Modifier
+                        .padding(horizontal = 24.dp)
+                        .fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = azulPrincipal.copy(alpha = 0.1f))
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Olá, $nome!", color = azulEscuro, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(8.dp))
+                        Text("Latitude: $lat", color = azulEscuro)
+                        Text("Longitude: $lon", color = azulEscuro)
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+
                 NavigationDrawerItem(
                     label = { Text("Perfil", color = azulEscuro) },
                     selected = false,
@@ -192,17 +212,6 @@ fun TelaHome(onLogout: () -> Unit, navController: NavController) {
                         navController.navigate("perfil")
                     },
                     icon = { Icon(Icons.Default.Person, contentDescription = "Perfil", tint = azulPrincipal) },
-                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
-                )
-
-                NavigationDrawerItem(
-                    label = { Text("Ouvidoria", color = azulEscuro) },
-                    selected = false,
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        navController.navigate("ouvidoria")
-                    },
-                    icon = { Icon(Icons.Default.Call, contentDescription = "Ouvidoria", tint = azulPrincipal) },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
 
@@ -219,6 +228,7 @@ fun TelaHome(onLogout: () -> Unit, navController: NavController) {
                         .fillMaxWidth()
                         .padding(16.dp)
                 ) {
+                    Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Sair", tint = Color.Red)
                     Spacer(Modifier.width(12.dp))
                     Text("Sair da conta", color = Color.Red, style = MaterialTheme.typography.titleMedium)
                 }

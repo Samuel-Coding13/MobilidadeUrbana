@@ -2,9 +2,6 @@ package com.example.mobilidadeurbana.view
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -15,7 +12,6 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.mobilidadeurbana.R
@@ -30,7 +26,6 @@ fun TelaDeLogin(
 ) {
     var email by rememberSaveable { mutableStateOf("") }
     var senha by rememberSaveable { mutableStateOf("") }
-    var senhaVisivel by rememberSaveable { mutableStateOf(false) }
     val mensagem by viewModel.mensagem
 
     var showResetDialog by remember { mutableStateOf(false) }
@@ -105,21 +100,11 @@ fun TelaDeLogin(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Campo de senha com botão de visibilidade
                     OutlinedTextField(
                         value = senha,
                         onValueChange = { senha = it },
                         label = { Text("Senha") },
-                        visualTransformation = if (senhaVisivel) VisualTransformation.None else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            IconButton(onClick = { senhaVisivel = !senhaVisivel }) {
-                                Icon(
-                                    imageVector = if (senhaVisivel) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                    contentDescription = if (senhaVisivel) "Ocultar senha" else "Mostrar senha",
-                                    tint = azulPrincipal
-                                )
-                            }
-                        },
+                        visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(

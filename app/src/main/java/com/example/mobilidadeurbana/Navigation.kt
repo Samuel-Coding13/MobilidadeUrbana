@@ -56,11 +56,5 @@ fun AppNavigation(
                 onBack = { navController.popBackStack() }
             )
         }
-
-        composable("ouvidoria") {
-            TelaOuvidoria(
-                onBack = { navController.popBackStack() }
-            )
-        }
     }
 }
