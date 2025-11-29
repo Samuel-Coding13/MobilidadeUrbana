@@ -1,3 +1,90 @@
 <resources>
-    <string name="app_name">MobilidadeUrbana</string>
+    <!-- Nome do aplicativo -->
+    <string name="app_name">Mobilidade Urbana</string>
+
+    <!-- Telas -->
+    <string name="login_title">Login</string>
+    <string name="register_title">Cadastro</string>
+    <string name="home_title">Mobilidade Urbana</string>
+    <string name="profile_title">Perfil</string>
+    <string name="ouvidoria_title">Ouvidoria</string>
+
+    <!-- Login -->
+    <string name="email_label">E-mail</string>
+    <string name="password_label">Senha</string>
+    <string name="login_button">Entrar</string>
+    <string name="no_account">Não tem conta? Cadastre-se</string>
+    <string name="forgot_password">Esqueci a senha</string>
+    <string name="show_password">Mostrar senha</string>
+    <string name="hide_password">Ocultar senha</string>
+
+    <!-- Registro -->
+    <string name="name_label">Nome</string>
+    <string name="confirm_password_label">Confirmar senha</string>
+    <string name="register_button">Cadastrar</string>
+    <string name="already_have_account">Já tem conta? Faça login</string>
+
+    <!-- Mensagens -->
+    <string name="fill_all_fields">Preencha todos os campos.</string>
+    <string name="passwords_dont_match">As senhas não coincidem.</string>
+    <string name="invalid_email">Formato de e-mail inválido.</string>
+    <string name="login_success">Login realizado com sucesso!</string>
+    <string name="register_success">Cadastro realizado! Verifique seu e-mail.</string>
+    <string name="verify_email">Verifique seu e-mail antes de continuar.</string>
+    <string name="email_verified">E-mail verificado! Redirecionando...</string>
+
+    <!-- Home -->
+    <string name="menu">Menu</string>
+    <string name="logout">Sair</string>
+    <string name="profile">Perfil</string>
+    <string name="ouvidoria">Ouvidoria</string>
+    <string name="hello">Olá, %s!</string>
+    <string name="latitude">Latitude: %s</string>
+    <string name="longitude">Longitude: %s</string>
+    <string name="start_tracking">Iniciar rastreamento</string>
+    <string name="stop_tracking">Parar rastreamento</string>
+
+    <!-- Splash -->
+    <string name="checking_connection">Verificando conexão...</string>
+    <string name="no_internet">Sem conexão com a internet</string>
+    <string name="check_connection">Verifique sua conexão Wi-Fi ou dados móveis e tente novamente.</string>
+    <string name="try_again">Tentar Novamente</string>
+
+    <!-- Recuperação de senha -->
+    <string name="reset_password_title">Recuperar senha</string>
+    <string name="reset_password_message">Informe o e-mail para receber o link de recuperação:</string>
+    <string name="send">Enviar</string>
+    <string name="cancel">Cancelar</string>
+    <string name="reset_email_sent">E-mail de recuperação enviado.</string>
+
+    <!-- Perfil -->
+    <string name="user_info">Informações do Usuário</string>
+    <string name="name">Nome:</string>
+    <string name="email">Email:</string>
+    <string name="change_password">Alterar Senha</string>
+    <string name="current_password">Senha atual</string>
+    <string name="new_password">Nova senha</string>
+    <string name="confirm_new_password">Confirmar nova senha</string>
+    <string name="password_changed_success">Senha alterada com sucesso!</string>
+    <string name="incorrect_current_password">Senha atual incorreta.</string>
+    <string name="password_min_length">A senha deve ter pelo menos 6 caracteres.</string>
+
+    <!-- Ouvidoria -->
+    <string name="problem_title">Título do problema</string>
+    <string name="problem_description">Descrição detalhada</string>
+    <string name="add_images">Adicionar Imagens</string>
+    <string name="send_report">Enviar Relatório</string>
+    <string name="report_sent_success">Relatório enviado com sucesso!</string>
+    <string name="confidentiality_notice">Suas informações serão tratadas com confidencialidade.</string>
+    <string name="ouvidoria_subtitle">Envie seu feedback ou reporte um problema</string>
+
+    <!-- Descrições de conteúdo (Acessibilidade) -->
+    <string name="cd_bus_icon">Ícone de ônibus</string>
+    <string name="cd_menu_icon">Ícone de menu</string>
+    <string name="cd_person_icon">Ícone de pessoa</string>
+    <string name="cd_logout_icon">Ícone de sair</string>
+    <string name="cd_back_icon">Voltar</string>
+    <string name="cd_location_icon">Ícone de localização</string>
+    <string name="cd_phone_icon">Ícone de telefone</string>
+    <string name="cd_remove_image">Remover imagem</string>
 </resources>
