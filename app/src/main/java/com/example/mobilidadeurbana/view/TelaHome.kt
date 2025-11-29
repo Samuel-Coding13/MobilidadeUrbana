@@ -5,26 +5,25 @@ import android.annotation.SuppressLint
 import android.os.Looper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ExitToApp
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.navigation.NavController
+import com.example.mobilidadeurbana.R
 import com.google.android.gms.location.*
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
@@ -39,13 +38,22 @@ import kotlin.math.roundToInt
 @Composable
 fun TelaHome(onLogout: () -> Unit, navController: NavController) {
     val context = LocalContext.current.applicationContext
+    val scope = rememberCoroutineScope()
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
 
-    // Configuração inicial do osmdroid
+    // CORES AZUIS
+    val azulPrincipal = Color(0xFF0066FF)
+    val azulClaro = Color(0xFF00D4FF)
+    val azulEscuro = Color(0xFF003366)
+    val fundoDrawer = Color(0xFFF8FBFF)
+
     LaunchedEffect(Unit) {
-        Configuration.getInstance().load(context, androidx.preference.PreferenceManager.getDefaultSharedPreferences(context))
+        Configuration.getInstance().load(
+            context,
+            androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)
+        )
     }
 
-    // Permissão de localização
     var hasLocationPermission by remember { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -64,7 +72,6 @@ fun TelaHome(onLogout: () -> Unit, navController: NavController) {
         )
     }
 
-    // Estados
     val user = FirebaseAuth.getInstance().currentUser
     val nome = user?.displayName ?: user?.email ?: "usuário"
     val fusedClient = LocationServices.getFusedLocationProviderClient(context)
@@ -111,7 +118,6 @@ fun TelaHome(onLogout: () -> Unit, navController: NavController) {
 
     fun stopTracking() {
         fusedClient.removeLocationUpdates(locationCallback)
-        // 🔥 Remove o marcador do mapa
         val map = mapViewRef
         userMarker?.let { marker ->
             map?.overlays?.remove(marker)
@@ -145,54 +151,67 @@ fun TelaHome(onLogout: () -> Unit, navController: NavController) {
         }
     }
 
-    // Drawer controlado via CoroutineScope
-    val drawerState = rememberDrawerState(DrawerValue.Closed)
-    val scope = rememberCoroutineScope()
-    val gesturesEnabled = drawerState.isOpen
+    LaunchedEffect(hasLocationPermission) {
+        if (hasLocationPermission) fetchLastLocationAndCenter()
+    }
 
-    // Interface principal
+    DisposableEffect(Unit) {
+        onDispose {
+            stopTracking()
+            mapViewRef = null
+        }
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
-        gesturesEnabled = gesturesEnabled, // ✅ só fecha por gesto quando aberto
+        gesturesEnabled = drawerState.isOpen,
         drawerContent = {
             ModalDrawerSheet(
-                drawerContainerColor = Color(0xFFEEEEEE),
-                drawerTonalElevation = 8.dp
+                drawerContainerColor = fundoDrawer,
+                drawerTonalElevation = 12.dp
             ) {
-                Spacer(Modifier.height(24.dp))
-                Text(
-                    "Menu",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(start = 24.dp, bottom = 16.dp)
-                )
+                Spacer(Modifier.height(32.dp))
+                Column(modifier = Modifier.padding(24.dp)) {
+                    Image(
+                        painter = painterResource(id = R.drawable.outline_bus_alert_24),
+                        contentDescription = null,
+                        modifier = Modifier.size(56.dp),
+                        colorFilter = ColorFilter.tint(azulPrincipal)
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text("Mobilidade Urbana", style = MaterialTheme.typography.headlineSmall, color = azulEscuro, fontWeight = FontWeight.Bold)
+                }
 
-                // Cartão de informações
+                HorizontalDivider(color = azulClaro.copy(alpha = 0.3f))
+
+                Spacer(Modifier.height(16.dp))
+
                 val lat = currentLocation?.latitude?.roundToInt()?.toString() ?: "—"
                 val lon = currentLocation?.longitude?.roundToInt()?.toString() ?: "—"
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color(0xFF2196F3),
+                Card(
                     modifier = Modifier
                         .padding(horizontal = 24.dp)
-                        .fillMaxWidth()
+                        .fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = azulPrincipal.copy(alpha = 0.1f))
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Olá, $nome!", color = Color.White, style = MaterialTheme.typography.titleMedium)
-                        Text("Latitude: $lat", color = Color.White)
-                        Text("Longitude: $lon", color = Color.White)
+                        Text("Olá, $nome!", color = azulEscuro, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(8.dp))
+                        Text("Latitude: $lat", color = azulEscuro)
+                        Text("Longitude: $lon", color = azulEscuro)
                     }
                 }
 
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(16.dp))
 
                 NavigationDrawerItem(
-                    label = { Text("Perfil") },
+                    label = { Text("Perfil", color = azulEscuro) },
                     selected = false,
                     onClick = {
                         scope.launch { drawerState.close() }
                         navController.navigate("perfil")
                     },
-                    icon = { Icon(Icons.Default.Person, contentDescription = "Perfil") },
+                    icon = { Icon(Icons.Default.Person, contentDescription = "Perfil", tint = azulPrincipal) },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
 
@@ -209,118 +228,73 @@ fun TelaHome(onLogout: () -> Unit, navController: NavController) {
                         .fillMaxWidth()
                         .padding(16.dp)
                 ) {
-                    Icon(Icons.Default.ExitToApp, contentDescription = "Sair")
-                    Spacer(Modifier.width(8.dp))
-                    Text("Sair")
-                }
-            }
-        },
-        content = {
-            Surface(modifier = Modifier.fillMaxSize()) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    // Mapa
-                    AndroidView(
-                        modifier = Modifier.fillMaxSize(),
-                        factory = { ctx ->
-                            val map = MapView(ctx).apply {
-                                setMultiTouchControls(true)
-                                controller.setZoom(16.0)
-                            }
-                            mapViewRef = map
-                            map
-                        },
-                        update = { map ->
-                            if (hasLocationPermission && currentLocation == null) fetchLastLocationAndCenter()
-                        }
-                    )
-
-                    // TopAppBar com clique para abrir menu
-                    TopAppBar(
-                        title = {
-                            Text(
-                                "Mobilidade Urbana",
-                                modifier = Modifier.clickable {
-                                    scope.launch { drawerState.open() }
-                                }
-                            )
-                        },
-                        navigationIcon = {
-                            IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                                Icon(Icons.Default.Menu, contentDescription = "Menu")
-                            }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = Color.Transparent,
-                            titleContentColor = Color.White,
-                            navigationIconContentColor = Color.White
-                        )
-                    )
-
-                    // 🔵 Barra inferior com botão perfeitamente centralizado
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .background(Color(0x66000000))
-                            .padding(16.dp)
-                    ) {
-                        // Linha base: botão de rastreamento centralizado
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            FloatingActionButton(
-                                onClick = {
-                                    if (isTracking) stopTracking() else startTracking()
-                                },
-                                shape = CircleShape,
-                                containerColor = if (isTracking) Color(0xFFD50000) else Color(0xFF00C853),
-                                modifier = Modifier.size(72.dp)
-                            ) {
-                                Icon(
-                                    if (isTracking) Icons.Default.Close else Icons.Default.PlayArrow,
-                                    contentDescription = if (isTracking) "Parar rastreamento" else "Iniciar rastreamento",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(38.dp)
-                                )
-                            }
-                        }
-
-                        // Botão Sair fixo no canto direito
-                        Button(
-                            onClick = {
-                                scope.launch { drawerState.close() }
-                                stopTracking()
-                                FirebaseAuth.getInstance().signOut()
-                                onLogout()
-                            },
-                            shape = RoundedCornerShape(40.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0277BD)),
-                            modifier = Modifier
-                                .align(Alignment.CenterEnd)
-                                .height(56.dp)
-                                .width(120.dp)
-                        ) {
-                            Icon(Icons.Default.ExitToApp, contentDescription = "Sair", tint = Color.White)
-                            Spacer(Modifier.width(6.dp))
-                            Text("Sair", color = Color.White)
-                        }
-                    }
+                    Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Sair", tint = Color.Red)
+                    Spacer(Modifier.width(12.dp))
+                    Text("Sair da conta", color = Color.Red, style = MaterialTheme.typography.titleMedium)
                 }
             }
         }
-    )
+    ) {
+        Scaffold(
+            topBar = {
+                CenterAlignedTopAppBar(
+                    title = {
+                        Text(
+                            "Mobilidade Urbana",
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                            Icon(Icons.Default.Menu, tint = Color.White, contentDescription = "Menu")
+                        }
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = azulPrincipal)
+                )
+            },
+            containerColor = Color(0xFFF0F7FF)
+        ) { paddingValues ->
+            Box(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
+                AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = { ctx ->
+                        val map = MapView(ctx).apply {
+                            setMultiTouchControls(true)
+                            controller.setZoom(16.0)
+                        }
+                        mapViewRef = map
+                        map
+                    },
+                    update = { map ->
+                        if (hasLocationPermission && currentLocation == null) fetchLastLocationAndCenter()
+                    }
+                )
 
-    // Atualiza posição inicial
-    LaunchedEffect(hasLocationPermission) {
-        if (hasLocationPermission) fetchLastLocationAndCenter()
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            stopTracking()
-            mapViewRef = null
+                // Botão de rastreamento flutuante
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    FloatingActionButton(
+                        onClick = { if (isTracking) stopTracking() else startTracking() },
+                        shape = CircleShape,
+                        containerColor = if (isTracking) Color(0xFFD50000) else Color(0xFF00C853),
+                        modifier = Modifier
+                            .size(72.dp)
+                            .align(Alignment.Center)
+                    ) {
+                        Icon(
+                            if (isTracking) Icons.Default.Close else Icons.Default.PlayArrow,
+                            contentDescription = if (isTracking) "Parar rastreamento" else "Iniciar rastreamento",
+                            tint = Color.White,
+                            modifier = Modifier.size(38.dp)
+                        )
+                    }
+                }
+            }
         }
     }
 }

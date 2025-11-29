@@ -1,27 +1,16 @@
-package com.example.mobilidadeurbana.util
+package com.example.mobilidadeurbana
 
-import androidx.compose.animation.core.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.material3.Text
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 
-/**
- * Utilitários leves. A função de carregar bitmap/uri foi removida por completo.
- * Mantemos apenas a animação de texto piscante usada para mensagens.
- */
-
-@Composable
-fun BlinkText(text: String) {
-    val transition = rememberInfiniteTransition()
-    val alpha by transition.animateFloat(
-        initialValue = 0.0f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 600),
-            repeatMode = RepeatMode.Reverse
-        )
-    )
-    Text(text = text, modifier = Modifier.alpha(alpha))
+fun Context.isInternetAvailable(): Boolean {
+    val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val network = connectivityManager.activeNetwork
+    val capabilities = connectivityManager.getNetworkCapabilities(network)
+    return capabilities != null && (
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                    capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ||
+                    capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+            )
 }
