@@ -11,30 +11,20 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/**
- * Representa uma rota com suas características
- * MODIFICADO: Removido campo 'codigo' da cor, mantido apenas 'cor'
- */
 data class Rota(
     val codigo: String = "",
     val nome: String = "",
-    val cor: String = "#0066FF", // Apenas o valor da cor em formato hexadecimal
+    val cor: String = "#0066FF",
     val pontos: List<PontoRota> = emptyList(),
     val paradas: List<Parada> = emptyList()
 )
 
-/**
- * Representa um ponto da rota (coordenada)
- */
 data class PontoRota(
     val id: String = "",
     val lat: Double = 0.0,
     val lng: Double = 0.0
 )
 
-/**
- * Representa uma parada de ônibus
- */
 data class Parada(
     val id: String = "",
     val nome: String = "",
@@ -42,9 +32,6 @@ data class Parada(
     val lng: Double = 0.0
 )
 
-/**
- * Representa um veículo em rastreamento
- */
 data class Veiculo(
     val uid: String = "",
     val lat: Double = 0.0,
@@ -66,8 +53,8 @@ class HomeViewModel : ViewModel() {
     var rotaSelecionada = mutableStateOf<Rota?>(null)
         private set
 
-    // NOVO: Veículo atual sendo rastreado (apenas o do usuário logado)
-    var veiculoAtual = mutableStateOf<Veiculo?>(null)
+    // Veículos da rota selecionada
+    var veiculos = mutableStateOf<List<Veiculo>>(emptyList())
         private set
 
     // Status do ônibus
@@ -78,32 +65,14 @@ class HomeViewModel : ViewModel() {
     var isTracking = mutableStateOf(false)
         private set
 
-    // NOVO: Flag para controle automático de câmera
-    var shouldFollowVehicle = mutableStateOf(false)
-        private set
-
-    // Job para controlar o loop de atualização de localização
+    // Job para controlar o loop de atualização
     private var trackingJob: Job? = null
 
-    // Listener para monitorar veículo em tempo real
-    private var veiculoListener: ListenerRegistration? = null
+    // Listener para veículos em tempo real
+    private var veiculosListener: ListenerRegistration? = null
 
     /**
-     * Carrega todas as rotas disponíveis do Firebase
-     * Estrutura esperada no Firestore:
-     * rotas/
-     *   ├── {codigo_rota}/
-     *   │   ├── nome: String
-     *   │   ├── cor: String (formato: "#RRGGBB")
-     *   │   ├── pontos: Array<Map>
-     *   │   │   ├── id: String
-     *   │   │   ├── lat: Number
-     *   │   │   └── lng: Number
-     *   │   └── paradas: Array<Map>
-     *   │       ├── id: String
-     *   │       ├── nome: String
-     *   │       ├── lat: Number
-     *   │       └── lng: Number
+     * Carrega todas as rotas do Firebase
      */
     fun carregarRotas() {
         firestore.collection("rotas")
@@ -115,7 +84,7 @@ class HomeViewModel : ViewModel() {
                         val nome = doc.getString("nome") ?: codigo
                         val cor = doc.getString("cor") ?: "#0066FF"
 
-                        // Carrega pontos da rota (coordenadas que formam a linha)
+                        // Carrega pontos da rota
                         val pontosMap = doc.get("pontos") as? List<Map<String, Any>> ?: emptyList()
                         val pontos = pontosMap.mapNotNull { ponto ->
                             try {
@@ -129,7 +98,7 @@ class HomeViewModel : ViewModel() {
                             }
                         }
 
-                        // Carrega paradas (pontos onde o ônibus para)
+                        // Carrega paradas
                         val paradasMap = doc.get("paradas") as? List<Map<String, Any>> ?: emptyList()
                         val paradas = paradasMap.mapNotNull { parada ->
                             try {
@@ -165,86 +134,64 @@ class HomeViewModel : ViewModel() {
     }
 
     /**
-     * Seleciona uma rota específica e inicia o monitoramento do veículo
-     * MODIFICADO: Agora monitora apenas o veículo do usuário atual
+     * Seleciona uma rota e inicia o monitoramento de veículos
      */
     fun selecionarRota(rota: Rota) {
         rotaSelecionada.value = rota
-        iniciarMonitoramentoVeiculo(rota.codigo)
+        iniciarMonitoramentoVeiculos(rota.codigo)
     }
 
     /**
-     * NOVO: Monitora apenas o veículo do usuário atual em tempo real
-     * Estrutura esperada no Firestore:
-     * onibus/
-     *   └── {codigo_rota}/
-     *       └── veiculos/
-     *           └── {uid_usuario}/
-     *               ├── uid: String
-     *               ├── lat: Number
-     *               ├── lng: Number
-     *               ├── status: String
-     *               └── timestamp: Timestamp
+     * Monitora veículos em tempo real
      */
-    private fun iniciarMonitoramentoVeiculo(codigoRota: String) {
-        val user = auth.currentUser ?: return
-
+    private fun iniciarMonitoramentoVeiculos(codigoRota: String) {
         // Cancela listener anterior se existir
-        veiculoListener?.remove()
+        veiculosListener?.remove()
 
-        // Monitora apenas o documento do usuário atual (não todos os veículos)
-        veiculoListener = firestore.collection("onibus")
+        veiculosListener = firestore.collection("onibus")
             .document(codigoRota)
             .collection("veiculos")
-            .document(user.uid)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     error.printStackTrace()
                     return@addSnapshotListener
                 }
 
-                if (snapshot != null && snapshot.exists()) {
-                    try {
-                        val veiculo = Veiculo(
-                            uid = snapshot.getString("uid") ?: "",
-                            lat = snapshot.getDouble("lat") ?: 0.0,
-                            lng = snapshot.getDouble("lng") ?: 0.0,
-                            status = snapshot.getString("status") ?: "Desconhecido",
-                            timestamp = snapshot.getTimestamp("timestamp")
-                        )
-                        veiculoAtual.value = veiculo
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+                if (snapshot != null) {
+                    val listaVeiculos = snapshot.documents.mapNotNull { doc ->
+                        try {
+                            Veiculo(
+                                uid = doc.getString("uid") ?: "",
+                                lat = doc.getDouble("lat") ?: 0.0,
+                                lng = doc.getDouble("lng") ?: 0.0,
+                                status = doc.getString("status") ?: "Desconhecido",
+                                timestamp = doc.getTimestamp("timestamp")
+                            )
+                        } catch (e: Exception) {
+                            null
+                        }
                     }
-                } else {
-                    // Veículo não existe mais no Firebase (rastreamento parado)
-                    veiculoAtual.value = null
+
+                    veiculos.value = listaVeiculos
                 }
             }
     }
 
     /**
-     * Define o status atual do ônibus
-     * Opções: "Em operação", "Parado", "Manutenção", "Fora de serviço"
+     * Define o status do ônibus
      */
     fun setStatus(status: String) {
         statusOnibus.value = status
     }
 
     /**
-     * Inicia o rastreamento do veículo
-     * MODIFICADO: Ativa automaticamente o follow da câmera
-     *
-     * @param latitude Latitude inicial do veículo
-     * @param longitude Longitude inicial do veículo
+     * Inicia o rastreamento com atualização a cada 5 segundos
      */
     fun startTracking(latitude: Double, longitude: Double) {
         if (isTracking.value) return
 
         isTracking.value = true
-        shouldFollowVehicle.value = true // Ativa o acompanhamento automático da câmera
 
-        // Inicia loop de atualização a cada 5 segundos
         trackingJob = CoroutineScope(Dispatchers.IO).launch {
             while (isTracking.value) {
                 updateLocationInFirebase(latitude, longitude)
@@ -254,11 +201,7 @@ class HomeViewModel : ViewModel() {
     }
 
     /**
-     * Atualiza a localização do veículo no Firebase em tempo real
-     * Salva na coleção: onibus/{codigo_rota}/veiculos/{uid_usuario}
-     *
-     * @param latitude Latitude atual do veículo
-     * @param longitude Longitude atual do veículo
+     * Atualiza a localização no Firebase em tempo real
      */
     fun updateLocationInFirebase(latitude: Double, longitude: Double) {
         val user = auth.currentUser ?: return
@@ -283,19 +226,16 @@ class HomeViewModel : ViewModel() {
     }
 
     /**
-     * Para o rastreamento do veículo
-     * MODIFICADO: Desativa o follow da câmera e remove o veículo do Firebase
+     * Para o rastreamento e remove do Firebase
      */
     fun stopTracking() {
         isTracking.value = false
-        shouldFollowVehicle.value = false // Desativa o acompanhamento da câmera
         trackingJob?.cancel()
         trackingJob = null
 
         val user = auth.currentUser ?: return
         val rota = rotaSelecionada.value?.codigo ?: return
 
-        // Remove o veículo do Firebase ao parar o rastreamento
         firestore.collection("onibus")
             .document(rota)
             .collection("veiculos")
@@ -303,26 +243,9 @@ class HomeViewModel : ViewModel() {
             .delete()
     }
 
-    /**
-     * NOVO: Desativa manualmente o acompanhamento automático da câmera
-     * Útil quando o usuário deseja mover o mapa manualmente
-     */
-    fun disableFollowVehicle() {
-        shouldFollowVehicle.value = false
-    }
-
-    /**
-     * NOVO: Reativa o acompanhamento automático da câmera
-     */
-    fun enableFollowVehicle() {
-        if (isTracking.value) {
-            shouldFollowVehicle.value = true
-        }
-    }
-
     override fun onCleared() {
         super.onCleared()
         stopTracking()
-        veiculoListener?.remove()
+        veiculosListener?.remove()
     }
 }

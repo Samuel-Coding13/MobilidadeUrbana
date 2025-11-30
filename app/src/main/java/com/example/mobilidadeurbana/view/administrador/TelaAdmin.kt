@@ -28,18 +28,15 @@ fun TelaAdmin(
 ) {
     val scope = rememberCoroutineScope()
 
-    val motoristas by viewModel.motoristasFiltrados // MODIFICADO: Usa lista filtrada
-    val administradores by viewModel.administradoresFiltrados // MODIFICADO: Usa lista filtrada
+    val motoristas by viewModel.motoristas
+    val administradores by viewModel.administradores
     val isLoading by viewModel.isLoading
-    val searchQuery by viewModel.searchQuery
-
     var showConfirmLogout by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableStateOf(0) }
 
     val azulPrincipal = Color(0xFF0066FF)
     val azulEscuro = Color(0xFF003366)
 
-    // Carrega dados quando muda de aba
     LaunchedEffect(selectedTab) {
         scope.launch {
             when (selectedTab) {
@@ -61,59 +58,18 @@ fun TelaAdmin(
                         }
                     }
                 )
-
-                // NOVO: Barra de pesquisa
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = {
-                        viewModel.updateSearchQuery(
-                            it,
-                            if (selectedTab == 0) "motorista" else "administrador"
-                        )
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    placeholder = { Text("Pesquisar por nome ou email...") },
-                    leadingIcon = {
-                        Icon(Icons.Default.Search, contentDescription = "Pesquisar")
-                    },
-                    trailingIcon = {
-                        if (searchQuery.isNotEmpty()) {
-                            IconButton(onClick = {
-                                viewModel.limparPesquisa(
-                                    if (selectedTab == 0) "motorista" else "administrador"
-                                )
-                            }) {
-                                Icon(Icons.Default.Clear, contentDescription = "Limpar pesquisa")
-                            }
-                        }
-                    },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = azulPrincipal,
-                        focusedLeadingIconColor = azulPrincipal
-                    )
-                )
-
                 TabRow(
                     selectedTabIndex = selectedTab,
                     containerColor = azulPrincipal
                 ) {
                     Tab(
                         selected = selectedTab == 0,
-                        onClick = {
-                            selectedTab = 0
-                            viewModel.limparPesquisa("motorista")
-                        },
+                        onClick = { selectedTab = 0 },
                         text = { Text("Motoristas", color = Color.White) }
                     )
                     Tab(
                         selected = selectedTab == 1,
-                        onClick = {
-                            selectedTab = 1
-                            viewModel.limparPesquisa("administrador")
-                        },
+                        onClick = { selectedTab = 1 },
                         text = { Text("Administradores", color = Color.White) }
                     )
                 }
@@ -150,15 +106,13 @@ fun TelaAdmin(
                         usuarios = motoristas,
                         viewModel = viewModel,
                         navController = navController,
-                        tipo = "Motorista",
-                        searchQuery = searchQuery
+                        tipo = "Motorista"
                     )
                     1 -> ListaUsuarios(
                         usuarios = administradores,
                         viewModel = viewModel,
                         navController = navController,
-                        tipo = "Administrador",
-                        searchQuery = searchQuery
+                        tipo = "Administrador"
                     )
                 }
             }
@@ -193,8 +147,7 @@ private fun ListaUsuarios(
     usuarios: List<Usuario>,
     viewModel: AdminViewModel,
     navController: NavController,
-    tipo: String,
-    searchQuery: String
+    tipo: String
 ) {
     val scope = rememberCoroutineScope()
     val azulPrincipal = Color(0xFF0066FF)
@@ -212,22 +165,21 @@ private fun ListaUsuarios(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // MODIFICADO: Ícone diferente para cada tipo
             Icon(
-                if (tipo == "Motorista") Icons.Default.DirectionsBus else Icons.Default.AdminPanelSettings,
+                Icons.Default.Person,
                 contentDescription = null,
                 modifier = Modifier.size(80.dp),
                 tint = Color.Gray
             )
             Spacer(Modifier.height(16.dp))
             Text(
-                if (searchQuery.isEmpty()) "Nenhum $tipo cadastrado" else "Nenhum resultado encontrado",
+                "Nenhum $tipo cadastrado",
                 style = MaterialTheme.typography.titleMedium,
                 color = Color.Gray
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                if (searchQuery.isEmpty()) "Clique no botão + para adicionar" else "Tente pesquisar com outros termos",
+                "Clique no botão + para adicionar",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.Gray
             )
@@ -252,13 +204,8 @@ private fun ListaUsuarios(
                         Row(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // NOVO: Ícone diferente para motorista e administrador
                             Icon(
-                                imageVector = if (tipo == "Motorista") {
-                                    Icons.Default.DirectionsBus // Ícone de ônibus para motorista
-                                } else {
-                                    Icons.Default.AdminPanelSettings // Ícone de escudo para admin
-                                },
+                                Icons.Default.Person,
                                 contentDescription = null,
                                 tint = azulPrincipal,
                                 modifier = Modifier.size(40.dp)
