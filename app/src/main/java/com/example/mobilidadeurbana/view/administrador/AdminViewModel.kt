@@ -29,6 +29,17 @@ class AdminViewModel : ViewModel() {
     var administradores = mutableStateOf<List<Usuario>>(emptyList())
         private set
 
+    // NOVO: Listas filtradas para pesquisa
+    var motoristasFiltrados = mutableStateOf<List<Usuario>>(emptyList())
+        private set
+
+    var administradoresFiltrados = mutableStateOf<List<Usuario>>(emptyList())
+        private set
+
+    // NOVO: Texto de pesquisa
+    var searchQuery = mutableStateOf("")
+        private set
+
     var isLoading = mutableStateOf(false)
         private set
 
@@ -41,7 +52,52 @@ class AdminViewModel : ViewModel() {
     }
 
     /**
+     * NOVO: Atualiza o texto de pesquisa e filtra os usuários
+     *
+     * @param query Texto digitado na barra de pesquisa
+     * @param tipo "motorista" ou "administrador"
+     */
+    fun updateSearchQuery(query: String, tipo: String) {
+        searchQuery.value = query
+
+        when (tipo) {
+            "motorista" -> {
+                motoristasFiltrados.value = if (query.isBlank()) {
+                    motoristas.value
+                } else {
+                    motoristas.value.filter { usuario ->
+                        usuario.nome.contains(query, ignoreCase = true) ||
+                                usuario.email.contains(query, ignoreCase = true)
+                    }
+                }
+            }
+            "administrador" -> {
+                administradoresFiltrados.value = if (query.isBlank()) {
+                    administradores.value
+                } else {
+                    administradores.value.filter { usuario ->
+                        usuario.nome.contains(query, ignoreCase = true) ||
+                                usuario.email.contains(query, ignoreCase = true)
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * NOVO: Limpa a pesquisa
+     */
+    fun limparPesquisa(tipo: String) {
+        searchQuery.value = ""
+        when (tipo) {
+            "motorista" -> motoristasFiltrados.value = motoristas.value
+            "administrador" -> administradoresFiltrados.value = administradores.value
+        }
+    }
+
+    /**
      * Carrega lista de motoristas (acesso = 2)
+     * MODIFICADO: Também atualiza a lista filtrada
      */
     suspend fun carregarMotoristas() {
         isLoading.value = true
@@ -51,7 +107,7 @@ class AdminViewModel : ViewModel() {
                 .get()
                 .await()
 
-            motoristas.value = snapshot.documents.mapNotNull { doc ->
+            val listaMotoristas = snapshot.documents.mapNotNull { doc ->
                 Usuario(
                     uid = doc.id,
                     nome = doc.getString("nome") ?: "",
@@ -60,6 +116,9 @@ class AdminViewModel : ViewModel() {
                     ativo = doc.getBoolean("ativo") ?: true
                 )
             }
+
+            motoristas.value = listaMotoristas
+            motoristasFiltrados.value = listaMotoristas // Inicializa a lista filtrada
         } catch (e: Exception) {
             mostrarMensagem("Erro ao carregar motoristas: ${e.message}")
         } finally {
@@ -69,6 +128,7 @@ class AdminViewModel : ViewModel() {
 
     /**
      * Carrega lista de administradores (acesso = 3)
+     * MODIFICADO: Também atualiza a lista filtrada
      */
     suspend fun carregarAdministradores() {
         isLoading.value = true
@@ -78,7 +138,7 @@ class AdminViewModel : ViewModel() {
                 .get()
                 .await()
 
-            administradores.value = snapshot.documents.mapNotNull { doc ->
+            val listaAdmins = snapshot.documents.mapNotNull { doc ->
                 Usuario(
                     uid = doc.id,
                     nome = doc.getString("nome") ?: "",
@@ -87,6 +147,9 @@ class AdminViewModel : ViewModel() {
                     ativo = doc.getBoolean("ativo") ?: true
                 )
             }
+
+            administradores.value = listaAdmins
+            administradoresFiltrados.value = listaAdmins // Inicializa a lista filtrada
         } catch (e: Exception) {
             mostrarMensagem("Erro ao carregar administradores: ${e.message}")
         } finally {
