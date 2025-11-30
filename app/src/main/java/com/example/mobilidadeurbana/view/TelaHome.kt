@@ -22,11 +22,12 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.example.mobilidadeurbana.R
+import com.example.mobilidadeurbana.viewmodel.HomeViewModel
 import com.google.android.gms.location.*
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
 import org.osmdroid.config.Configuration
 import org.osmdroid.util.GeoPoint
@@ -36,11 +37,14 @@ import org.osmdroid.views.overlay.Marker
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("MissingPermission")
 @Composable
-fun TelaHome(onLogout: () -> Unit, navController: NavController) {
+fun TelaHome(
+    onLogout: () -> Unit,
+    navController: NavController,
+    viewModel: HomeViewModel = viewModel()
+) {
     val context = LocalContext.current.applicationContext
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
-    val firestore = FirebaseFirestore.getInstance()
     val user = FirebaseAuth.getInstance().currentUser
 
     // CORES AZUIS
@@ -49,9 +53,12 @@ fun TelaHome(onLogout: () -> Unit, navController: NavController) {
     val azulEscuro = Color(0xFF003366)
     val fundoDrawer = Color(0xFFF8FBFF)
 
-    // Estados para os botões
-    var statusOnibus by remember { mutableStateOf("Parado") }
-    var rotaSelecionada by remember { mutableStateOf("") }
+    // Estados do ViewModel
+    val statusOnibus by viewModel.statusOnibus
+    val rotaSelecionada by viewModel.rotaSelecionada
+    val isTracking by viewModel.isTracking
+
+    // Estados dos diálogos
     var showStatusDialog by remember { mutableStateOf(false) }
     var showRotaDialog by remember { mutableStateOf(false) }
     var showConfirmDialog by remember { mutableStateOf(false) }
@@ -90,7 +97,6 @@ fun TelaHome(onLogout: () -> Unit, navController: NavController) {
     var mapViewRef by remember { mutableStateOf<MapView?>(null) }
     var currentLocation by remember { mutableStateOf<android.location.Location?>(null) }
     var userMarker by remember { mutableStateOf<Marker?>(null) }
-    var isTracking by remember { mutableStateOf(false) }
 
     val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000L)
         .setMinUpdateDistanceMeters(2f)
@@ -118,21 +124,9 @@ fun TelaHome(onLogout: () -> Unit, navController: NavController) {
                 map.controller.animateTo(geo)
                 map.invalidate()
 
-                // Atualiza localização no Firebase CORRETAMENTE
-                if (isTracking && rotaSelecionada.isNotEmpty() && user != null) {
-                    firestore.collection("onibus")
-                        .document(rotaSelecionada)
-                        .collection("veiculos")
-                        .document(user.uid)
-                        .set(
-                            hashMapOf(
-                                "uid" to user.uid,
-                                "lat" to loc.latitude,
-                                "lng" to loc.longitude,
-                                "status" to statusOnibus,
-                                "timestamp" to com.google.firebase.Timestamp.now()
-                            )
-                        )
+                // Atualiza localização no Firebase via ViewModel
+                if (isTracking) {
+                    viewModel.updateLocationInFirebase(loc.latitude, loc.longitude)
                 }
             }
         }
@@ -141,23 +135,20 @@ fun TelaHome(onLogout: () -> Unit, navController: NavController) {
     fun startTracking() {
         if (!hasLocationPermission) return
         if (rotaSelecionada.isEmpty()) return
+
         try {
             fusedClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
-            isTracking = true
+
+            // Inicia tracking no ViewModel com localização atual
+            currentLocation?.let { loc ->
+                viewModel.startTracking(loc.latitude, loc.longitude)
+            }
         } catch (_: SecurityException) {}
     }
 
     fun stopTracking() {
         fusedClient.removeLocationUpdates(locationCallback)
-
-        // Remove do Firebase
-        if (user != null && rotaSelecionada.isNotEmpty()) {
-            firestore.collection("onibus")
-                .document(rotaSelecionada)
-                .collection("veiculos")
-                .document(user.uid)
-                .delete()
-        }
+        viewModel.stopTracking()
 
         val map = mapViewRef
         userMarker?.let { marker ->
@@ -165,7 +156,6 @@ fun TelaHome(onLogout: () -> Unit, navController: NavController) {
             map?.invalidate()
         }
         userMarker = null
-        isTracking = false
     }
 
     fun fetchLastLocationAndCenter() {
@@ -203,7 +193,6 @@ fun TelaHome(onLogout: () -> Unit, navController: NavController) {
         }
     }
 
-    // Intercepta o botão voltar
     BackHandler {
         showExitDialog = true
     }
@@ -349,7 +338,7 @@ fun TelaHome(onLogout: () -> Unit, navController: NavController) {
                                     stopTracking()
                                 } else {
                                     if (rotaSelecionada.isEmpty()) {
-                                        // Mostrar mensagem
+                                        // Poderia mostrar Snackbar aqui
                                     } else {
                                         showConfirmDialog = true
                                     }
@@ -384,7 +373,7 @@ fun TelaHome(onLogout: () -> Unit, navController: NavController) {
                     }
                 }
 
-                // Chip mostrando rota selecionada (mantém rota persistente)
+                // Chip mostrando rota selecionada (PERSISTENTE)
                 if (rotaSelecionada.isNotEmpty()) {
                     Card(
                         modifier = Modifier
@@ -424,7 +413,7 @@ fun TelaHome(onLogout: () -> Unit, navController: NavController) {
                         ) {
                             RadioButton(
                                 selected = statusOnibus == status,
-                                onClick = { statusOnibus = status }
+                                onClick = { viewModel.setStatus(status) }
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(status)
@@ -458,7 +447,7 @@ fun TelaHome(onLogout: () -> Unit, navController: NavController) {
                         ) {
                             RadioButton(
                                 selected = rotaSelecionada == rota,
-                                onClick = { rotaSelecionada = rota },
+                                onClick = { viewModel.setRota(rota) },
                                 enabled = !isTracking
                             )
                             Spacer(Modifier.width(8.dp))
