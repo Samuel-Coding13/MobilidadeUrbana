@@ -2,12 +2,17 @@ package com.example.mobilidadeurbana.view
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.graphics.Paint
 import android.os.Looper
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -17,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -33,6 +39,7 @@ import org.osmdroid.config.Configuration
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Polyline
 
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("MissingPermission")
@@ -47,31 +54,31 @@ fun TelaHome(
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val user = FirebaseAuth.getInstance().currentUser
 
-    // CORES AZUIS
     val azulPrincipal = Color(0xFF0066FF)
     val azulClaro = Color(0xFF00D4FF)
     val azulEscuro = Color(0xFF003366)
     val fundoDrawer = Color(0xFFF8FBFF)
 
-    // Estados do ViewModel
     val statusOnibus by viewModel.statusOnibus
     val rotaSelecionada by viewModel.rotaSelecionada
     val isTracking by viewModel.isTracking
+    val rotas by viewModel.rotas
+    val veiculos by viewModel.veiculos
 
-    // Estados dos diálogos
     var showStatusDialog by remember { mutableStateOf(false) }
     var showRotaDialog by remember { mutableStateOf(false) }
     var showConfirmDialog by remember { mutableStateOf(false) }
     var showExitDialog by remember { mutableStateOf(false) }
 
     val statusOptions = listOf("Em operação", "Parado", "Manutenção", "Fora de serviço")
-    val rotaOptions = listOf("T1", "T2", "T3")
 
+    // Carrega rotas ao iniciar
     LaunchedEffect(Unit) {
         Configuration.getInstance().load(
             context,
             androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)
         )
+        viewModel.carregarRotas()
     }
 
     var hasLocationPermission by remember { mutableStateOf(false) }
@@ -97,6 +104,9 @@ fun TelaHome(
     var mapViewRef by remember { mutableStateOf<MapView?>(null) }
     var currentLocation by remember { mutableStateOf<android.location.Location?>(null) }
     var userMarker by remember { mutableStateOf<Marker?>(null) }
+    var routePolyline by remember { mutableStateOf<Polyline?>(null) }
+    var paradaMarkers by remember { mutableStateOf<List<Marker>>(emptyList()) }
+    var veiculoMarkers by remember { mutableStateOf<Map<String, Marker>>(emptyMap()) }
 
     val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000L)
         .setMinUpdateDistanceMeters(2f)
@@ -121,10 +131,12 @@ fun TelaHome(
                 } else {
                     userMarker?.position = geo
                 }
-                map.controller.animateTo(geo)
+
+                if (!isTracking) {
+                    map.controller.animateTo(geo)
+                }
                 map.invalidate()
 
-                // Atualiza localização no Firebase via ViewModel
                 if (isTracking) {
                     viewModel.updateLocationInFirebase(loc.latitude, loc.longitude)
                 }
@@ -132,14 +144,102 @@ fun TelaHome(
         }
     }
 
+    // Desenha a rota no mapa
+    fun desenharRota(rota: com.example.mobilidadeurbana.viewmodel.Rota) {
+        val map = mapViewRef ?: return
+
+        // Remove desenhos anteriores
+        routePolyline?.let { map.overlays.remove(it) }
+        paradaMarkers.forEach { map.overlays.remove(it) }
+
+        // Desenha a linha da rota
+        if (rota.pontos.isNotEmpty()) {
+            val polyline = Polyline(map)
+            val geoPoints = rota.pontos.map { GeoPoint(it.lat, it.lng) }
+            polyline.setPoints(geoPoints)
+
+            // Converte cor hex para Color e depois para int
+            val corInt = try {
+                android.graphics.Color.parseColor(rota.cor)
+            } catch (e: Exception) {
+                azulPrincipal.toArgb()
+            }
+
+            polyline.outlinePaint.color = corInt
+            polyline.outlinePaint.strokeWidth = 8f
+            polyline.outlinePaint.style = Paint.Style.STROKE
+
+            map.overlays.add(polyline)
+            routePolyline = polyline
+
+            // Centraliza no primeiro ponto
+            if (geoPoints.isNotEmpty()) {
+                map.controller.setZoom(14.0)
+                map.controller.setCenter(geoPoints[0])
+            }
+        }
+
+        // Adiciona marcadores de paradas
+        val novosMarkers = rota.paradas.map { parada ->
+            val marker = Marker(map)
+            marker.position = GeoPoint(parada.lat, parada.lng)
+            marker.title = parada.nome
+            marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+            map.overlays.add(marker)
+            marker
+        }
+        paradaMarkers = novosMarkers
+
+        map.invalidate()
+    }
+
+    // Atualiza marcadores de veículos
+    LaunchedEffect(veiculos) {
+        val map = mapViewRef ?: return@LaunchedEffect
+        val currentUid = user?.uid
+
+        // Remove marcadores de veículos que não existem mais
+        val uidsAtuais = veiculos.map { it.uid }.toSet()
+        veiculoMarkers.forEach { (uid, marker) ->
+            if (uid !in uidsAtuais && uid != currentUid) {
+                map.overlays.remove(marker)
+            }
+        }
+
+        // Atualiza ou cria marcadores
+        val novosMarkers = mutableMapOf<String, Marker>()
+        veiculos.forEach { veiculo ->
+            if (veiculo.uid != currentUid) {
+                val marker = veiculoMarkers[veiculo.uid] ?: Marker(map).also {
+                    it.title = "Veículo - ${veiculo.status}"
+                    it.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                    map.overlays.add(it)
+                }
+
+                marker.position = GeoPoint(veiculo.lat, veiculo.lng)
+                marker.title = "Veículo - ${veiculo.status}"
+                novosMarkers[veiculo.uid] = marker
+            }
+        }
+
+        veiculoMarkers = novosMarkers
+        map.invalidate()
+    }
+
+    // Desenha rota quando selecionada
+    LaunchedEffect(rotaSelecionada) {
+        rotaSelecionada?.let { rota ->
+            desenharRota(rota)
+        }
+    }
+
     fun startTracking() {
         if (!hasLocationPermission) return
-        if (rotaSelecionada.isEmpty()) return
+        if (rotaSelecionada == null) return
 
         try {
             fusedClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
 
-            // Inicia tracking no ViewModel com localização atual
             currentLocation?.let { loc ->
                 viewModel.startTracking(loc.latitude, loc.longitude)
             }
@@ -149,13 +249,6 @@ fun TelaHome(
     fun stopTracking() {
         fusedClient.removeLocationUpdates(locationCallback)
         viewModel.stopTracking()
-
-        val map = mapViewRef
-        userMarker?.let { marker ->
-            map?.overlays?.remove(marker)
-            map?.invalidate()
-        }
-        userMarker = null
     }
 
     fun fetchLastLocationAndCenter() {
@@ -172,11 +265,12 @@ fun TelaHome(
                     marker.position = geo
                     map.overlays.add(marker)
                     userMarker = marker
-                } else {
-                    userMarker?.position = geo
                 }
-                map.controller.setZoom(17.0)
-                map.controller.setCenter(geo)
+
+                if (rotaSelecionada == null) {
+                    map.controller.setZoom(17.0)
+                    map.controller.setCenter(geo)
+                }
                 map.invalidate()
             }
         }
@@ -298,13 +392,9 @@ fun TelaHome(
                         }
                         mapViewRef = map
                         map
-                    },
-                    update = { map ->
-                        if (hasLocationPermission && currentLocation == null) fetchLastLocationAndCenter()
                     }
                 )
 
-                // Botões na parte inferior
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -316,7 +406,6 @@ fun TelaHome(
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Botão Status
                         FloatingActionButton(
                             onClick = { showStatusDialog = true },
                             shape = CircleShape,
@@ -331,14 +420,13 @@ fun TelaHome(
                             )
                         }
 
-                        // Botão Rastreamento (central, maior)
                         FloatingActionButton(
                             onClick = {
                                 if (isTracking) {
                                     stopTracking()
                                 } else {
-                                    if (rotaSelecionada.isEmpty()) {
-                                        // Poderia mostrar Snackbar aqui
+                                    if (rotaSelecionada == null) {
+                                        // Mostrar mensagem
                                     } else {
                                         showConfirmDialog = true
                                     }
@@ -356,7 +444,6 @@ fun TelaHome(
                             )
                         }
 
-                        // Botão Rota
                         FloatingActionButton(
                             onClick = { showRotaDialog = true },
                             shape = CircleShape,
@@ -373,16 +460,21 @@ fun TelaHome(
                     }
                 }
 
-                // Chip mostrando rota selecionada (PERSISTENTE)
-                if (rotaSelecionada.isNotEmpty()) {
+                rotaSelecionada?.let { rota ->
                     Card(
                         modifier = Modifier
                             .align(Alignment.TopCenter)
                             .padding(top = 16.dp),
-                        colors = CardDefaults.cardColors(containerColor = azulPrincipal)
+                        colors = CardDefaults.cardColors(
+                            containerColor = try {
+                                Color(android.graphics.Color.parseColor(rota.cor))
+                            } catch (e: Exception) {
+                                azulPrincipal
+                            }
+                        )
                     ) {
                         Text(
-                            text = "Rota: $rotaSelecionada",
+                            text = "Rota: ${rota.nome}",
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                             color = Color.White,
                             fontWeight = FontWeight.Bold
@@ -429,38 +521,58 @@ fun TelaHome(
         )
     }
 
-    // Dialog de Rota
+    // Dialog de Seleção de Rota
     if (showRotaDialog) {
         AlertDialog(
             onDismissRequest = { showRotaDialog = false },
             title = { Text("Selecionar Rota", fontWeight = FontWeight.Bold) },
             text = {
-                Column {
-                    Text("Escolha a rota que será rastreada:")
-                    Spacer(Modifier.height(16.dp))
-                    rotaOptions.forEach { rota ->
+                LazyColumn {
+                    items(rotas) { rota ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 4.dp),
+                                .clickable(enabled = !isTracking) {
+                                    viewModel.selecionarRota(rota)
+                                }
+                                .padding(vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(
-                                selected = rotaSelecionada == rota,
-                                onClick = { viewModel.setRota(rota) },
+                                selected = rotaSelecionada?.codigo == rota.codigo,
+                                onClick = { viewModel.selecionarRota(rota) },
                                 enabled = !isTracking
                             )
-                            Spacer(Modifier.width(8.dp))
-                            Text(rota)
+                            Spacer(Modifier.width(12.dp))
+
+                            // Retângulo colorido
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .background(
+                                        try {
+                                            Color(android.graphics.Color.parseColor(rota.cor))
+                                        } catch (e: Exception) {
+                                            azulPrincipal
+                                        },
+                                        shape = MaterialTheme.shapes.small
+                                    )
+                            )
+
+                            Spacer(Modifier.width(12.dp))
+                            Text("${rota.nome} (${rota.codigo})")
                         }
                     }
+
                     if (isTracking) {
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Pare o rastreamento para mudar de rota",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.Red
-                        )
+                        item {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "Pare o rastreamento para mudar de rota",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.Red
+                            )
+                        }
                     }
                 }
             },
@@ -481,7 +593,7 @@ fun TelaHome(
                 Column {
                     Text("Deseja realmente iniciar o rastreamento?")
                     Spacer(Modifier.height(12.dp))
-                    Text("Rota: $rotaSelecionada", fontWeight = FontWeight.Bold, color = azulPrincipal)
+                    Text("Rota: ${rotaSelecionada?.nome}", fontWeight = FontWeight.Bold, color = azulPrincipal)
                     Text("Status: $statusOnibus", fontWeight = FontWeight.Bold, color = azulPrincipal)
                 }
             },

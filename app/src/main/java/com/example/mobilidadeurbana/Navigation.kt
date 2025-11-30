@@ -8,6 +8,7 @@ import androidx.navigation.compose.composable
 import com.example.mobilidadeurbana.view.*
 import com.example.mobilidadeurbana.view.administrador.TelaAdmin
 import com.example.mobilidadeurbana.view.administrador.TelaCriarMotorista
+import com.example.mobilidadeurbana.view.administrador.TelaCriarAdmin
 import com.example.mobilidadeurbana.viewmodel.AuthViewModel
 import com.example.mobilidadeurbana.viewmodel.AdminViewModel
 
@@ -17,7 +18,6 @@ fun AppNavigation(
     authViewModel: AuthViewModel,
     startDestination: String = "login"
 ) {
-    // ViewModel do Admin é criado uma vez e compartilhado entre as telas
     val adminViewModel: AdminViewModel = viewModel()
 
     NavHost(
@@ -29,17 +29,14 @@ fun AppNavigation(
             TelaDeLogin(
                 viewModel = authViewModel,
                 onNavigateToCadastro = {
-                    // Navega para a tela de cadastro (se existir)
-                    // Por enquanto, pode deixar vazio ou mostrar mensagem
+                    // Implementar tela de cadastro se necessário
                 },
                 onLoginSuccess = { isAdmin ->
                     if (isAdmin) {
-                        // Redireciona para área administrativa
                         navController.navigate("admin") {
                             popUpTo("login") { inclusive = true }
                         }
                     } else {
-                        // Redireciona para área do motorista
                         navController.navigate("home") {
                             popUpTo("login") { inclusive = true }
                         }
@@ -90,6 +87,14 @@ fun AppNavigation(
         // TELA DE CRIAR MOTORISTA
         composable("admin/criar-motorista") {
             TelaCriarMotorista(
+                onBack = { navController.popBackStack() },
+                viewModel = adminViewModel
+            )
+        }
+
+        // TELA DE CRIAR ADMINISTRADOR
+        composable("admin/criar-admin") {
+            TelaCriarAdmin(
                 onBack = { navController.popBackStack() },
                 viewModel = adminViewModel
             )

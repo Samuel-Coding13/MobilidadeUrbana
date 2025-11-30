@@ -7,10 +7,12 @@ import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 
-data class Motorista(
+data class Usuario(
     val uid: String = "",
     val nome: String = "",
-    val email: String = ""
+    val email: String = "",
+    val acesso: Int = 0,
+    val ativo: Boolean = true
 )
 
 class AdminViewModel : ViewModel() {
@@ -21,7 +23,10 @@ class AdminViewModel : ViewModel() {
     var mensagem = mutableStateOf("")
         private set
 
-    var motoristas = mutableStateOf<List<Motorista>>(emptyList())
+    var motoristas = mutableStateOf<List<Usuario>>(emptyList())
+        private set
+
+    var administradores = mutableStateOf<List<Usuario>>(emptyList())
         private set
 
     var isLoading = mutableStateOf(false)
@@ -36,7 +41,7 @@ class AdminViewModel : ViewModel() {
     }
 
     /**
-     * Carrega lista de motoristas do Firestore
+     * Carrega lista de motoristas (acesso = 2)
      */
     suspend fun carregarMotoristas() {
         isLoading.value = true
@@ -47,10 +52,12 @@ class AdminViewModel : ViewModel() {
                 .await()
 
             motoristas.value = snapshot.documents.mapNotNull { doc ->
-                Motorista(
+                Usuario(
                     uid = doc.id,
                     nome = doc.getString("nome") ?: "",
-                    email = doc.getString("email") ?: ""
+                    email = doc.getString("email") ?: "",
+                    acesso = doc.getLong("acesso")?.toInt() ?: 0,
+                    ativo = doc.getBoolean("ativo") ?: true
                 )
             }
         } catch (e: Exception) {
@@ -61,12 +68,66 @@ class AdminViewModel : ViewModel() {
     }
 
     /**
-     * Cria novo motorista (nível 2)
+     * Carrega lista de administradores (acesso = 3)
+     */
+    suspend fun carregarAdministradores() {
+        isLoading.value = true
+        try {
+            val snapshot = firestore.collection("usuarios")
+                .whereEqualTo("acesso", 3)
+                .get()
+                .await()
+
+            administradores.value = snapshot.documents.mapNotNull { doc ->
+                Usuario(
+                    uid = doc.id,
+                    nome = doc.getString("nome") ?: "",
+                    email = doc.getString("email") ?: "",
+                    acesso = doc.getLong("acesso")?.toInt() ?: 0,
+                    ativo = doc.getBoolean("ativo") ?: true
+                )
+            }
+        } catch (e: Exception) {
+            mostrarMensagem("Erro ao carregar administradores: ${e.message}")
+        } finally {
+            isLoading.value = false
+        }
+    }
+
+    /**
+     * Cria novo motorista (acesso = 2)
      */
     fun cadastrarMotorista(
         nome: String,
         email: String,
         senha: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        cadastrarUsuario(nome, email, senha, 2, onSuccess, onError)
+    }
+
+    /**
+     * Cria novo administrador (acesso = 3)
+     */
+    fun cadastrarAdministrador(
+        nome: String,
+        email: String,
+        senha: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        cadastrarUsuario(nome, email, senha, 3, onSuccess, onError)
+    }
+
+    /**
+     * Função genérica para cadastrar usuário
+     */
+    private fun cadastrarUsuario(
+        nome: String,
+        email: String,
+        senha: String,
+        nivelAcesso: Int,
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
@@ -87,7 +148,6 @@ class AdminViewModel : ViewModel() {
 
         isLoading.value = true
 
-        // Salva o usuário atual (admin) para reautenticar depois
         val adminUser = auth.currentUser
 
         auth.createUserWithEmailAndPassword(email, senha)
@@ -101,7 +161,6 @@ class AdminViewModel : ViewModel() {
 
                     val userId = newUser.uid
 
-                    // Atualiza displayName
                     val profile = UserProfileChangeRequest.Builder()
                         .setDisplayName(nome)
                         .build()
@@ -111,23 +170,18 @@ class AdminViewModel : ViewModel() {
                             "id" to userId,
                             "nome" to nome,
                             "email" to email,
-                            "acesso" to 2, // Motorista é nível 2
-                            "cordx" to null,
-                            "cordy" to null,
-                            "mapaAtualId" to null
+                            "acesso" to nivelAcesso,
+                            "ativo" to true
                         )
 
                         firestore.collection("usuarios")
                             .document(userId)
                             .set(userData)
                             .addOnSuccessListener {
-                                // Envia email de verificação
                                 newUser.sendEmailVerification()
                                     .addOnCompleteListener {
-                                        // Desloga o motorista recém criado
                                         auth.signOut()
 
-                                        // Reautentica o admin se ainda estiver disponível
                                         if (adminUser != null) {
                                             adminUser.reload()
                                         }
@@ -157,29 +211,9 @@ class AdminViewModel : ViewModel() {
     }
 
     /**
-     * Exclui um motorista (opcional - se quiser implementar)
+     * Atualiza dados de um usuário
      */
-    fun excluirMotorista(uid: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
-        isLoading.value = true
-
-        firestore.collection("usuarios")
-            .document(uid)
-            .delete()
-            .addOnSuccessListener {
-                isLoading.value = false
-                mostrarMensagem("Motorista excluído com sucesso")
-                onSuccess()
-            }
-            .addOnFailureListener { e ->
-                isLoading.value = false
-                onError("Erro ao excluir: ${e.message}")
-            }
-    }
-
-    /**
-     * Atualiza dados de um motorista (opcional)
-     */
-    fun atualizarMotorista(
+    fun atualizarUsuario(
         uid: String,
         nome: String,
         email: String,
@@ -203,12 +237,57 @@ class AdminViewModel : ViewModel() {
             .update(updates)
             .addOnSuccessListener {
                 isLoading.value = false
-                mostrarMensagem("Motorista atualizado com sucesso")
+                mostrarMensagem("Usuário atualizado com sucesso")
                 onSuccess()
             }
             .addOnFailureListener { e ->
                 isLoading.value = false
                 onError("Erro ao atualizar: ${e.message}")
+            }
+    }
+
+    /**
+     * Ativa ou desativa um usuário
+     */
+    fun toggleUsuarioAtivo(
+        uid: String,
+        ativoAtual: Boolean,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        isLoading.value = true
+
+        firestore.collection("usuarios")
+            .document(uid)
+            .update("ativo", !ativoAtual)
+            .addOnSuccessListener {
+                isLoading.value = false
+                mostrarMensagem(if (!ativoAtual) "Usuário ativado" else "Usuário desativado")
+                onSuccess()
+            }
+            .addOnFailureListener { e ->
+                isLoading.value = false
+                onError("Erro ao alterar status: ${e.message}")
+            }
+    }
+
+    /**
+     * Exclui um usuário
+     */
+    fun excluirUsuario(uid: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        isLoading.value = true
+
+        firestore.collection("usuarios")
+            .document(uid)
+            .delete()
+            .addOnSuccessListener {
+                isLoading.value = false
+                mostrarMensagem("Usuário excluído com sucesso")
+                onSuccess()
+            }
+            .addOnFailureListener { e ->
+                isLoading.value = false
+                onError("Erro ao excluir: ${e.message}")
             }
     }
 }
