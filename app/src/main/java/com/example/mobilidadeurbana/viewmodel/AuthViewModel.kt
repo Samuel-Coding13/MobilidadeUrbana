@@ -2,7 +2,6 @@ package com.example.mobilidadeurbana.viewmodel
 
 import androidx.lifecycle.ViewModel
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
 import androidx.compose.runtime.mutableStateOf
 
@@ -23,64 +22,9 @@ class AuthViewModel : ViewModel() {
     }
 
     /**
-     * Cria usuário sem qualquer dado de imagem.
-     * Salva apenas nome e email no Firestore.
+     * Login com verificação de nível de acesso 2 (motorista) ou 3 (admin)
      */
-    fun cadastrarUsuario(
-        nome: String,
-        email: String,
-        senha: String,
-        onSuccess: () -> Unit
-    ) {
-        if (nome.isBlank() || email.isBlank() || senha.isBlank()) {
-            mostrarMensagem("Preencha todos os campos.")
-            return
-        }
-
-        auth.createUserWithEmailAndPassword(email, senha)
-            .addOnCompleteListener { createTask ->
-                if (createTask.isSuccessful) {
-                    val user = auth.currentUser ?: run {
-                        mostrarMensagem("Erro interno ao criar conta.")
-                        return@addOnCompleteListener
-                    }
-
-                    val userId = user.uid
-
-                    // Atualiza apenas displayName (sem photoUrl)
-                    val profile = UserProfileChangeRequest.Builder()
-                        .setDisplayName(nome)
-                        .build()
-
-                    user.updateProfile(profile).addOnCompleteListener {
-                        val userData = hashMapOf(
-                            "id" to userId,
-                            "name" to nome,
-                            "email" to email,
-                            "cordx" to null,
-                            "cordy" to null,
-                            "mapaAtualId" to null
-                        )
-
-                        firestore.collection("usuarios")
-                            .document(userId)
-                            .set(userData)
-                            .addOnCompleteListener {
-                                user.sendEmailVerification()
-                                    .addOnCompleteListener {
-                                        mostrarMensagem("Conta criada com sucesso! Verifique seu e-mail.")
-                                        onSuccess()
-                                    }
-                            }
-                    }
-
-                } else {
-                    mostrarMensagem("Erro: ${createTask.exception?.message}")
-                }
-            }
-    }
-
-    fun loginUsuario(email: String, senha: String, onSuccess: () -> Unit) {
+    fun loginUsuario(email: String, senha: String, onSuccess: (Boolean) -> Unit) {
         if (email.isBlank() || senha.isBlank()) {
             mostrarMensagem("Preencha todos os campos.")
             return
@@ -91,8 +35,32 @@ class AuthViewModel : ViewModel() {
                 if (task.isSuccessful) {
                     val user = auth.currentUser
                     if (user != null && user.isEmailVerified) {
-                        mostrarMensagem("Login realizado com sucesso!")
-                        onSuccess()
+                        // Verifica o nível de acesso
+                        firestore.collection("usuarios")
+                            .document(user.uid)
+                            .get()
+                            .addOnSuccessListener { document ->
+                                val acesso = document.getLong("acesso")?.toInt()
+
+                                when (acesso) {
+                                    2 -> {
+                                        mostrarMensagem("Login realizado com sucesso!")
+                                        onSuccess(false) // Motorista
+                                    }
+                                    3 -> {
+                                        mostrarMensagem("Login como Administrador")
+                                        onSuccess(true) // Administrador
+                                    }
+                                    else -> {
+                                        mostrarMensagem("Acesso negado. Apenas motoristas e administradores podem acessar.")
+                                        auth.signOut()
+                                    }
+                                }
+                            }
+                            .addOnFailureListener {
+                                mostrarMensagem("Erro ao verificar permissões. Tente novamente.")
+                                auth.signOut()
+                            }
                     } else {
                         user?.sendEmailVerification()
                         mostrarMensagem("Verifique seu e-mail antes de continuar.")

@@ -26,15 +26,15 @@ import com.example.mobilidadeurbana.viewmodel.AuthViewModel
 fun TelaDeLogin(
     viewModel: AuthViewModel,
     onNavigateToCadastro: () -> Unit,
-    onLoginSuccess: () -> Unit
+    onLoginSuccess: (Boolean) -> Unit
 ) {
     var email by rememberSaveable { mutableStateOf("") }
     var senha by rememberSaveable { mutableStateOf("") }
     var senhaVisivel by rememberSaveable { mutableStateOf(false) }
-    val mensagem by viewModel.mensagem
-
     var showResetDialog by remember { mutableStateOf(false) }
-    var resetEmail by rememberSaveable { mutableStateOf("") }
+    var emailReset by rememberSaveable { mutableStateOf("") }
+
+    val mensagem by viewModel.mensagem
 
     // CORES AZUIS
     val azulPrincipal = Color(0xFF0066FF)
@@ -70,8 +70,7 @@ fun TelaDeLogin(
             ) {
                 Column(
                     modifier = Modifier.padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Image(
                         painter = painterResource(id = R.drawable.outline_bus_alert_24),
@@ -83,7 +82,7 @@ fun TelaDeLogin(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Text(
-                        "Faça seu login",
+                        "Bem-vindo!",
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
                         color = azulEscuro
@@ -105,7 +104,6 @@ fun TelaDeLogin(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Campo de senha com botão de visibilidade
                     OutlinedTextField(
                         value = senha,
                         onValueChange = { senha = it },
@@ -115,8 +113,7 @@ fun TelaDeLogin(
                             IconButton(onClick = { senhaVisivel = !senhaVisivel }) {
                                 Icon(
                                     imageVector = if (senhaVisivel) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                    contentDescription = if (senhaVisivel) "Ocultar senha" else "Mostrar senha",
-                                    tint = azulPrincipal
+                                    contentDescription = if (senhaVisivel) "Ocultar" else "Mostrar"
                                 )
                             }
                         },
@@ -128,20 +125,28 @@ fun TelaDeLogin(
                         )
                     )
 
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    TextButton(
+                        onClick = { showResetDialog = true },
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Text("Esqueci a senha", color = azulPrincipal)
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     Button(
                         onClick = {
                             when {
                                 email.isEmpty() || senha.isEmpty() -> {
-                                    viewModel.mostrarMensagem("Por favor, preencha todos os campos.")
-                                }
-                                !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches() -> {
-                                    viewModel.mostrarMensagem("Formato de e-mail inválido.")
+                                    viewModel.mostrarMensagem("Preencha todos os campos.")
                                 }
                                 else -> {
                                     viewModel.limparMensagem()
-                                    viewModel.loginUsuario(email, senha, onLoginSuccess)
+                                    viewModel.loginUsuario(email, senha) { isAdmin ->
+                                        onLoginSuccess(isAdmin)
+                                    }
                                 }
                             }
                         },
@@ -152,21 +157,6 @@ fun TelaDeLogin(
                         shape = MaterialTheme.shapes.medium
                     ) {
                         Text("Entrar", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        TextButton(onClick = onNavigateToCadastro) {
-                            Text("Não tem conta? Cadastre-se", color = azulPrincipal)
-                        }
-
-                        TextButton(onClick = { showResetDialog = true }) {
-                            Text("Esqueci a senha", color = azulPrincipal)
-                        }
                     }
 
                     if (mensagem.isNotEmpty()) {
@@ -185,38 +175,39 @@ fun TelaDeLogin(
         }
     }
 
+    // Dialog de Reset de Senha
     if (showResetDialog) {
         AlertDialog(
             onDismissRequest = { showResetDialog = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.enviarResetSenha(resetEmail)
-                    showResetDialog = false
-                }) {
-                    Text("Enviar", color = azulPrincipal)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showResetDialog = false }) {
-                    Text("Cancelar", color = Color.Gray)
-                }
-            },
-            title = { Text("Recuperar senha", color = azulEscuro, fontWeight = FontWeight.Bold) },
+            title = { Text("Recuperar Senha", fontWeight = FontWeight.Bold) },
             text = {
                 Column {
                     Text("Informe o e-mail para receber o link de recuperação:")
                     Spacer(Modifier.height(12.dp))
                     OutlinedTextField(
-                        value = resetEmail,
-                        onValueChange = { resetEmail = it },
-                        label = { Text("Email") },
+                        value = emailReset,
+                        onValueChange = { emailReset = it },
+                        label = { Text("E-mail") },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = azulPrincipal,
-                            focusedLabelColor = azulPrincipal
-                        )
+                        modifier = Modifier.fillMaxWidth()
                     )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.enviarResetSenha(emailReset)
+                    showResetDialog = false
+                    emailReset = ""
+                }) {
+                    Text("Enviar", color = azulPrincipal)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showResetDialog = false
+                    emailReset = ""
+                }) {
+                    Text("Cancelar", color = Color.Gray)
                 }
             }
         )

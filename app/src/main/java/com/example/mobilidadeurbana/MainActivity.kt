@@ -26,8 +26,10 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.compose.rememberNavController
 import com.example.mobilidadeurbana.viewmodel.AuthViewModel
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 class MainActivity : ComponentActivity() {
     private val authViewModel: AuthViewModel by viewModels()
@@ -85,8 +87,28 @@ fun SplashWithPersistentAuth(
             if (connected) {
                 delay(600)
                 val user = FirebaseAuth.getInstance().currentUser
-                val isLoggedIn = user != null && user.isEmailVerified
-                onResult(if (isLoggedIn) "home" else "login")
+
+                if (user != null && user.isEmailVerified) {
+                    // Verifica nível de acesso
+                    try {
+                        val doc = FirebaseFirestore.getInstance()
+                            .collection("usuarios")
+                            .document(user.uid)
+                            .get()
+                            .await()
+
+                        val acesso = doc.getLong("acesso")?.toInt()
+                        when (acesso) {
+                            2 -> onResult("home")     // Motorista
+                            3 -> onResult("admin")    // Administrador
+                            else -> onResult("login")
+                        }
+                    } catch (e: Exception) {
+                        onResult("login")
+                    }
+                } else {
+                    onResult("login")
+                }
             }
             isChecking = false
         }
