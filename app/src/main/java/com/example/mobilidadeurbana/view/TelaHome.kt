@@ -2,9 +2,7 @@ package com.example.mobilidadeurbana.view
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.graphics.Paint
 import android.os.Looper
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -63,7 +61,6 @@ fun TelaHome(
     val rotaSelecionada by viewModel.rotaSelecionada
     val isTracking by viewModel.isTracking
     val rotas by viewModel.rotas
-    val veiculos by viewModel.veiculos
 
     var showStatusDialog by remember { mutableStateOf(false) }
     var showRotaDialog by remember { mutableStateOf(false) }
@@ -72,7 +69,6 @@ fun TelaHome(
 
     val statusOptions = listOf("Em operação", "Parado", "Manutenção", "Fora de serviço")
 
-    // Carrega rotas ao iniciar
     LaunchedEffect(Unit) {
         Configuration.getInstance().load(
             context,
@@ -106,7 +102,6 @@ fun TelaHome(
     var userMarker by remember { mutableStateOf<Marker?>(null) }
     var routePolyline by remember { mutableStateOf<Polyline?>(null) }
     var paradaMarkers by remember { mutableStateOf<List<Marker>>(emptyList()) }
-    var veiculoMarkers by remember { mutableStateOf<Map<String, Marker>>(emptyMap()) }
 
     val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000L)
         .setMinUpdateDistanceMeters(2f)
@@ -144,7 +139,7 @@ fun TelaHome(
         }
     }
 
-    // Desenha a rota no mapa
+    // BASEADO NO CÓDIGO DO EDUARDO - Polyline correta
     fun desenharRota(rota: com.example.mobilidadeurbana.viewmodel.Rota) {
         val map = mapViewRef ?: return
 
@@ -152,34 +147,42 @@ fun TelaHome(
         routePolyline?.let { map.overlays.remove(it) }
         paradaMarkers.forEach { map.overlays.remove(it) }
 
-        // Desenha a linha da rota
+        // Cria a polyline
         if (rota.pontos.isNotEmpty()) {
             val polyline = Polyline(map)
-            val geoPoints = rota.pontos.map { GeoPoint(it.lat, it.lng) }
+
+            // Converte pontos para GeoPoint
+            val geoPoints = rota.pontos.map { ponto ->
+                GeoPoint(ponto.lat, ponto.lng)
+            }
+
             polyline.setPoints(geoPoints)
 
-            // Converte cor hex para Color e depois para int
+            // Cor da linha
             val corInt = try {
                 android.graphics.Color.parseColor(rota.cor)
             } catch (e: Exception) {
                 azulPrincipal.toArgb()
             }
 
-            polyline.outlinePaint.color = corInt
-            polyline.outlinePaint.strokeWidth = 8f
-            polyline.outlinePaint.style = Paint.Style.STROKE
+            // Configura estilo (BASEADO NO CÓDIGO DO EDUARDO)
+            polyline.outlinePaint.apply {
+                color = corInt
+                strokeWidth = 10f
+                isAntiAlias = true
+            }
 
             map.overlays.add(polyline)
             routePolyline = polyline
 
-            // Centraliza no primeiro ponto
+            // Centraliza
             if (geoPoints.isNotEmpty()) {
                 map.controller.setZoom(14.0)
                 map.controller.setCenter(geoPoints[0])
             }
         }
 
-        // Adiciona marcadores de paradas
+        // Paradas
         val novosMarkers = rota.paradas.map { parada ->
             val marker = Marker(map)
             marker.position = GeoPoint(parada.lat, parada.lng)
@@ -193,53 +196,22 @@ fun TelaHome(
         map.invalidate()
     }
 
-    // Atualiza marcadores de veículos
-    LaunchedEffect(veiculos) {
-        val map = mapViewRef ?: return@LaunchedEffect
-        val currentUid = user?.uid
 
-        // Remove marcadores de veículos que não existem mais
-        val uidsAtuais = veiculos.map { it.uid }.toSet()
-        veiculoMarkers.forEach { (uid, marker) ->
-            if (uid !in uidsAtuais && uid != currentUid) {
-                map.overlays.remove(marker)
-            }
-        }
 
-        // Atualiza ou cria marcadores
-        val novosMarkers = mutableMapOf<String, Marker>()
-        veiculos.forEach { veiculo ->
-            if (veiculo.uid != currentUid) {
-                val marker = veiculoMarkers[veiculo.uid] ?: Marker(map).also {
-                    it.title = "Veículo - ${veiculo.status}"
-                    it.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                    map.overlays.add(it)
-                }
-
-                marker.position = GeoPoint(veiculo.lat, veiculo.lng)
-                marker.title = "Veículo - ${veiculo.status}"
-                novosMarkers[veiculo.uid] = marker
-            }
-        }
-
-        veiculoMarkers = novosMarkers
-        map.invalidate()
-    }
-
-    // Desenha rota quando selecionada
     LaunchedEffect(rotaSelecionada) {
         rotaSelecionada?.let { rota ->
             desenharRota(rota)
         }
     }
 
+    // CORRIGIDO: Função startTracking simplificada
     fun startTracking() {
         if (!hasLocationPermission) return
         if (rotaSelecionada == null) return
+        if (isTracking) return // Evita duplo clique
 
         try {
             fusedClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
-
             currentLocation?.let { loc ->
                 viewModel.startTracking(loc.latitude, loc.longitude)
             }
@@ -283,12 +255,7 @@ fun TelaHome(
     DisposableEffect(Unit) {
         onDispose {
             stopTracking()
-            mapViewRef = null
         }
-    }
-
-    BackHandler {
-        showExitDialog = true
     }
 
     ModalNavigationDrawer(
@@ -406,20 +373,22 @@ fun TelaHome(
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // Botão Status
                         FloatingActionButton(
                             onClick = { showStatusDialog = true },
                             shape = CircleShape,
                             containerColor = Color(0xFFFF9800),
-                            modifier = Modifier.size(64.dp)
+                            modifier = Modifier.size(56.dp)
                         ) {
                             Icon(
                                 Icons.Default.Info,
                                 contentDescription = "Status",
                                 tint = Color.White,
-                                modifier = Modifier.size(32.dp)
+                                modifier = Modifier.size(28.dp)
                             )
                         }
 
+                        // Botão Play/Stop - CORRIGIDO
                         FloatingActionButton(
                             onClick = {
                                 if (isTracking) {
@@ -434,27 +403,28 @@ fun TelaHome(
                             },
                             shape = CircleShape,
                             containerColor = if (isTracking) Color(0xFFD50000) else Color(0xFF00C853),
-                            modifier = Modifier.size(72.dp)
+                            modifier = Modifier.size(70.dp)
                         ) {
                             Icon(
                                 if (isTracking) Icons.Default.Close else Icons.Default.PlayArrow,
                                 contentDescription = if (isTracking) "Parar" else "Iniciar",
                                 tint = Color.White,
-                                modifier = Modifier.size(38.dp)
+                                modifier = Modifier.size(36.dp)
                             )
                         }
 
+                        // Botão Rota
                         FloatingActionButton(
                             onClick = { showRotaDialog = true },
                             shape = CircleShape,
                             containerColor = azulPrincipal,
-                            modifier = Modifier.size(64.dp)
+                            modifier = Modifier.size(56.dp)
                         ) {
                             Icon(
                                 Icons.Default.LocationOn,
                                 contentDescription = "Rota",
                                 tint = Color.White,
-                                modifier = Modifier.size(32.dp)
+                                modifier = Modifier.size(28.dp)
                             )
                         }
                     }
@@ -485,7 +455,7 @@ fun TelaHome(
         }
     }
 
-    // Dialog de Status
+    // Dialog Status
     if (showStatusDialog) {
         AlertDialog(
             onDismissRequest = { showStatusDialog = false },
@@ -521,7 +491,7 @@ fun TelaHome(
         )
     }
 
-    // Dialog de Seleção de Rota
+    // Dialog Rota
     if (showRotaDialog) {
         AlertDialog(
             onDismissRequest = { showRotaDialog = false },
@@ -545,7 +515,6 @@ fun TelaHome(
                             )
                             Spacer(Modifier.width(12.dp))
 
-                            // Retângulo colorido
                             Box(
                                 modifier = Modifier
                                     .size(24.dp)
@@ -584,7 +553,7 @@ fun TelaHome(
         )
     }
 
-    // Dialog de Confirmação
+    // Dialog Confirmação
     if (showConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showConfirmDialog = false },
@@ -600,7 +569,7 @@ fun TelaHome(
             confirmButton = {
                 TextButton(onClick = {
                     showConfirmDialog = false
-                    startTracking()
+                    startTracking() // Chama apenas UMA vez
                 }) {
                     Text("SIM", color = Color(0xFF00C853), fontWeight = FontWeight.Bold)
                 }
@@ -613,7 +582,7 @@ fun TelaHome(
         )
     }
 
-    // Dialog de Saída
+    // Dialog Saída
     if (showExitDialog) {
         AlertDialog(
             onDismissRequest = { showExitDialog = false },

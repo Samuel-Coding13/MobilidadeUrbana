@@ -1,7 +1,7 @@
 package com.example.mobilidadeurbana.viewmodel
 
-import androidx.lifecycle.ViewModel
 import androidx.compose.runtime.mutableStateOf
+import androidx.lifecycle.ViewModel
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
@@ -58,7 +58,7 @@ class HomeViewModel : ViewModel() {
         private set
 
     // Status do ônibus
-    var statusOnibus = mutableStateOf("Parado")
+    var statusOnibus = mutableStateOf("Em operação")
         private set
 
     // Estado do rastreamento
@@ -70,6 +70,10 @@ class HomeViewModel : ViewModel() {
 
     // Listener para veículos em tempo real
     private var veiculosListener: ListenerRegistration? = null
+
+    // Última localização conhecida do usuário
+    var lastUserLocation = mutableStateOf<Pair<Double, Double>?>(null)
+        private set
 
     /**
      * Carrega todas as rotas do Firebase
@@ -142,6 +146,16 @@ class HomeViewModel : ViewModel() {
     }
 
     /**
+     * Limpa a rota selecionada
+     */
+    fun limparRotaSelecionada() {
+        veiculosListener?.remove()
+        veiculosListener = null
+        rotaSelecionada.value = null
+        veiculos.value = emptyList()
+    }
+
+    /**
      * Monitora veículos em tempo real
      */
     private fun iniciarMonitoramentoVeiculos(codigoRota: String) {
@@ -185,17 +199,30 @@ class HomeViewModel : ViewModel() {
     }
 
     /**
+     * Atualiza a última localização do usuário
+     */
+    fun updateLastUserLocation(lat: Double, lng: Double) {
+        lastUserLocation.value = Pair(lat, lng)
+    }
+
+    /**
      * Inicia o rastreamento com atualização a cada 5 segundos
      */
     fun startTracking(latitude: Double, longitude: Double) {
         if (isTracking.value) return
 
         isTracking.value = true
+        updateLastUserLocation(latitude, longitude)
+
+        // Primeira atualização imediata
+        updateLocationInFirebase(latitude, longitude)
 
         trackingJob = CoroutineScope(Dispatchers.IO).launch {
             while (isTracking.value) {
-                updateLocationInFirebase(latitude, longitude)
                 delay(5000) // Atualiza a cada 5 segundos
+                lastUserLocation.value?.let { (lat, lng) ->
+                    updateLocationInFirebase(lat, lng)
+                }
             }
         }
     }
@@ -206,6 +233,8 @@ class HomeViewModel : ViewModel() {
     fun updateLocationInFirebase(latitude: Double, longitude: Double) {
         val user = auth.currentUser ?: return
         val rota = rotaSelecionada.value?.codigo ?: return
+
+        updateLastUserLocation(latitude, longitude)
 
         val locationData = hashMapOf(
             "uid" to user.uid,
