@@ -29,6 +29,7 @@ fun AppNavigation(
             TelaDeLogin(
                 viewModel = authViewModel,
                 onNavigateToCadastro = {
+                    // Implementar tela de cadastro se necessário
                 },
                 onLoginSuccess = { isAdmin ->
                     if (isAdmin) {

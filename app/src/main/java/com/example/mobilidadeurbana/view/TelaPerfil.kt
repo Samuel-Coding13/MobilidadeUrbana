@@ -27,6 +27,7 @@ import com.google.firebase.auth.FirebaseAuth
 fun TelaPerfil(onBack: () -> Unit) {
     val user = FirebaseAuth.getInstance().currentUser
 
+    // CORES AZUIS
     val azulPrincipal = Color(0xFF0066FF)
     val azulEscuro = Color(0xFF003366)
 
@@ -40,9 +41,6 @@ fun TelaPerfil(onBack: () -> Unit) {
     var senhaAtualVisivel by rememberSaveable { mutableStateOf(false) }
     var novaSenhaVisivel by rememberSaveable { mutableStateOf(false) }
     var confirmarSenhaVisivel by rememberSaveable { mutableStateOf(false) }
-
-    // REMOVIDO: BackHandler que fechava o app
-    // Agora apenas usa o onBack() que volta para a tela anterior
 
     Scaffold(
         topBar = {
