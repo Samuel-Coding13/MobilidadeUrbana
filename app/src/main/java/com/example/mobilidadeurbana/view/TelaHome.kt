@@ -3,6 +3,7 @@ package com.example.mobilidadeurbana.view
 import android.Manifest
 import android.annotation.SuppressLint
 import android.graphics.Paint
+import android.graphics.drawable.BitmapDrawable
 import android.os.Looper
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -28,6 +29,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.example.mobilidadeurbana.R
@@ -100,7 +102,7 @@ fun TelaHome(
     }
 
     val nome = user?.displayName ?: user?.email ?: "usuário"
-    val fusedClient = LocationServices.getFusedLocationProviderClient(context)
+    val fusedClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     var mapViewRef by remember { mutableStateOf<MapView?>(null) }
     var currentLocation by remember { mutableStateOf<android.location.Location?>(null) }
     var userMarker by remember { mutableStateOf<Marker?>(null) }
@@ -108,10 +110,12 @@ fun TelaHome(
     var paradaMarkers by remember { mutableStateOf<List<Marker>>(emptyList()) }
     var veiculoMarkers by remember { mutableStateOf<Map<String, Marker>>(emptyMap()) }
 
-    val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000L)
-        .setMinUpdateDistanceMeters(2f)
-        .setMaxUpdateDelayMillis(5000L)
-        .build()
+    val locationRequest = remember {
+        LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000L)
+            .setMinUpdateDistanceMeters(2f)
+            .setMaxUpdateDelayMillis(5000L)
+            .build()
+    }
 
     val locationCallback = remember {
         object : LocationCallback() {
@@ -126,6 +130,18 @@ fun TelaHome(
                     marker.title = nome
                     marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                     marker.position = geo
+
+                    // USA O ÍCONE ic_bus para o usuário em rastreamento
+                    try {
+                        val drawable = context.getDrawable(R.drawable.ic_bus)
+                        if (drawable != null) {
+                            val bitmap = drawable.toBitmap(50, 50) //Tamanho pixels
+                            marker.icon = BitmapDrawable(context.resources, bitmap)
+                        }
+                    } catch (e: Exception) {
+                        // Usa ícone padrão se não encontrar
+                    }
+
                     map.overlays.add(marker)
                     userMarker = marker
                 } else {
@@ -152,13 +168,12 @@ fun TelaHome(
         routePolyline?.let { map.overlays.remove(it) }
         paradaMarkers.forEach { map.overlays.remove(it) }
 
-        // Desenha a linha da rota
+        // Desenha a LINHA da rota (NÃO cria marcadores para estes pontos)
         if (rota.pontos.isNotEmpty()) {
             val polyline = Polyline(map)
             val geoPoints = rota.pontos.map { GeoPoint(it.lat, it.lng) }
             polyline.setPoints(geoPoints)
 
-            // Converte cor hex para Color e depois para int
             val corInt = try {
                 android.graphics.Color.parseColor(rota.cor)
             } catch (e: Exception) {
@@ -179,12 +194,25 @@ fun TelaHome(
             }
         }
 
-        // Adiciona marcadores de paradas
+        // Adiciona marcadores APENAS das PARADAS (com ícone ic_bus_stop redimensionado)
         val novosMarkers = rota.paradas.map { parada ->
             val marker = Marker(map)
             marker.position = GeoPoint(parada.lat, parada.lng)
             marker.title = parada.nome
             marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+
+            // USA O ÍCONE ic_bus_stop REDIMENSIONADO
+            try {
+                val drawable = context.getDrawable(R.drawable.ic_bus_stop)
+                if (drawable != null) {
+                    // Redimensiona o ícone para 48x48 pixels (tamanho adequado)
+                    val bitmap = drawable.toBitmap(48, 48)
+                    marker.icon = BitmapDrawable(context.resources, bitmap)
+                }
+            } catch (e: Exception) {
+                // Se não encontrar o ícone, usa o padrão
+            }
+
             map.overlays.add(marker)
             marker
         }
@@ -213,6 +241,18 @@ fun TelaHome(
                 val marker = veiculoMarkers[veiculo.uid] ?: Marker(map).also {
                     it.title = "Veículo - ${veiculo.status}"
                     it.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+
+                    // Ícone para outros veículos
+                    try {
+                        val drawable = context.getDrawable(R.drawable.ic_bus)
+                        if (drawable != null) {
+                            val bitmap = drawable.toBitmap(50, 50)
+                            it.icon = BitmapDrawable(context.resources, bitmap)
+                        }
+                    } catch (e: Exception) {
+                        // Usa padrão
+                    }
+
                     map.overlays.add(it)
                 }
 
@@ -263,6 +303,18 @@ fun TelaHome(
                     marker.title = nome
                     marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                     marker.position = geo
+
+                    // Ícone ic_bus para usuário
+                    try {
+                        val drawable = context.getDrawable(R.drawable.ic_bus)
+                        if (drawable != null) {
+                            val bitmap = drawable.toBitmap(60, 60)
+                            marker.icon = BitmapDrawable(context.resources, bitmap)
+                        }
+                    } catch (e: Exception) {
+                        // Padrão
+                    }
+
                     map.overlays.add(marker)
                     userMarker = marker
                 }
@@ -319,7 +371,10 @@ fun TelaHome(
                     label = { Text("Perfil", color = azulEscuro) },
                     selected = false,
                     onClick = {
-                        scope.launch { drawerState.close() }
+                        scope.launch {
+                            drawerState.close()
+                        }
+                        // Navega SEM parar o rastreamento
                         navController.navigate("perfil")
                     },
                     icon = { Icon(Icons.Default.Person, contentDescription = "Perfil", tint = azulPrincipal) },
@@ -334,7 +389,10 @@ fun TelaHome(
                     label = { Text("Ouvidoria", color = azulEscuro) },
                     selected = false,
                     onClick = {
-                        scope.launch { drawerState.close() }
+                        scope.launch {
+                            drawerState.close()
+                        }
+                        // Navega SEM parar o rastreamento
                         navController.navigate("ouvidoria")
                     },
                     icon = { Icon(Icons.Default.Call, contentDescription = "Ouvidoria", tint = azulPrincipal) },
@@ -356,6 +414,7 @@ fun TelaHome(
                         .fillMaxWidth()
                         .padding(16.dp)
                 ) {
+                    Icon(Icons.Default.ExitToApp, contentDescription = "Sair", tint = Color.Red)
                     Spacer(Modifier.width(12.dp))
                     Text("Sair da conta", color = Color.Red, style = MaterialTheme.typography.titleMedium)
                 }
@@ -545,7 +604,6 @@ fun TelaHome(
                             )
                             Spacer(Modifier.width(12.dp))
 
-                            // Retângulo colorido
                             Box(
                                 modifier = Modifier
                                     .size(24.dp)
