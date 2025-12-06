@@ -64,13 +64,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Metadata do Google Maps (se usar futuramente) -->
-        <!-- Descomente e adicione sua API Key se usar Google Maps
-        <meta-data
-            android:name="com.google.android.geo.API_KEY"
-            android:value="SUA_API_KEY_AQUI" />
-        -->
-
     </application>
 
 </manifest>

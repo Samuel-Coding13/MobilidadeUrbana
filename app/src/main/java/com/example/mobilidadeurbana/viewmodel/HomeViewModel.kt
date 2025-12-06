@@ -1,5 +1,6 @@
 package com.example.mobilidadeurbana.viewmodel
 
+import android.content.Context
 import android.util.Log
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
@@ -8,9 +9,12 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.GeoPoint
 import com.google.firebase.firestore.Query
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import org.osmdroid.views.overlay.Polyline
@@ -41,6 +45,9 @@ class HomeViewModel : ViewModel() {
     private val auth = FirebaseAuth.getInstance()
     private val firestore = FirebaseFirestore.getInstance()
 
+    // Job para controlar o rastreamento em background
+    private var trackingJob: Job? = null
+
     // Estados principais
     var statusOnibus = mutableStateOf("Em operação")
         private set
@@ -54,6 +61,11 @@ class HomeViewModel : ViewModel() {
     var rotas = mutableStateOf<List<Rota>>(emptyList())
         private set
 
+    // Última localização conhecida
+    private var lastLat = 0.0
+    private var lastLng = 0.0
+    private var lastSpeed = 0f
+
     // Polylines para o mapa
     private val _polylines = MutableStateFlow<List<Polyline>>(emptyList())
     val polylines: StateFlow<List<Polyline>> = _polylines.asStateFlow()
@@ -66,6 +78,10 @@ class HomeViewModel : ViewModel() {
      */
     fun setStatus(novoStatus: String) {
         statusOnibus.value = novoStatus
+        // Se estiver rastreando, atualiza imediatamente no Firestore
+        if (isTracking.value) {
+            updateLocationInFirebase(lastLat, lastLng, lastSpeed)
+        }
     }
 
     /**
@@ -205,12 +221,24 @@ class HomeViewModel : ViewModel() {
     }
 
     /**
-     * Inicia o rastreamento do veículo
+     * Inicia o rastreamento do veículo com atualização contínua em background
      */
     fun startTracking(lat: Double, lng: Double, velocidade: Float) {
         val user = auth.currentUser ?: return
         val rota = rotaSelecionada.value ?: return
 
+        // Armazena a localização inicial
+        lastLat = lat
+        lastLng = lng
+        lastSpeed = velocidade
+
+        // Cancela job anterior se existir
+        trackingJob?.cancel()
+
+        // Inicia o rastreamento
+        isTracking.value = true
+
+        // Envia a localização inicial imediatamente
         viewModelScope.launch {
             try {
                 val dados = hashMapOf(
@@ -230,10 +258,27 @@ class HomeViewModel : ViewModel() {
                     .set(dados)
                     .await()
 
-                isTracking.value = true
                 Log.d("HOME_VM", "Rastreamento iniciado na rota ${rota.codigo}")
             } catch (e: Exception) {
                 Log.e("HOME_VM", "Erro ao iniciar rastreamento", e)
+            }
+        }
+
+        // Inicia o loop contínuo de atualização em background
+        trackingJob = viewModelScope.launch {
+            while (isActive && isTracking.value) {
+                try {
+                    // Aguarda 2 segundos entre atualizações
+                    delay(2000)
+
+                    // Atualiza no Firestore
+                    if (isTracking.value) {
+                        updateLocationInFirebase(lastLat, lastLng, lastSpeed)
+                    }
+                } catch (e: Exception) {
+                    Log.e("HOME_VM", "Erro no loop de rastreamento", e)
+                    // Continua o loop mesmo com erro
+                }
             }
         }
     }
@@ -244,6 +289,12 @@ class HomeViewModel : ViewModel() {
     fun stopTracking() {
         val user = auth.currentUser ?: return
 
+        // Cancela o job de rastreamento
+        trackingJob?.cancel()
+        trackingJob = null
+
+        isTracking.value = false
+
         viewModelScope.launch {
             try {
                 firestore
@@ -252,7 +303,6 @@ class HomeViewModel : ViewModel() {
                     .delete()
                     .await()
 
-                isTracking.value = false
                 Log.d("HOME_VM", "Rastreamento parado")
             } catch (e: Exception) {
                 Log.e("HOME_VM", "Erro ao parar rastreamento", e)
@@ -269,6 +319,11 @@ class HomeViewModel : ViewModel() {
         val user = auth.currentUser ?: return
         val rota = rotaSelecionada.value ?: return
 
+        // Armazena a última localização
+        lastLat = lat
+        lastLng = lng
+        lastSpeed = velocidade
+
         viewModelScope.launch {
             try {
                 val dados = hashMapOf(
@@ -288,6 +343,7 @@ class HomeViewModel : ViewModel() {
                     .set(dados)
                     .await()
 
+                Log.d("HOME_VM", "Localização atualizada: $lat, $lng")
             } catch (e: Exception) {
                 Log.e("HOME_VM", "Erro ao atualizar localização", e)
             }
@@ -296,6 +352,8 @@ class HomeViewModel : ViewModel() {
 
     override fun onCleared() {
         super.onCleared()
+        // Cancela o rastreamento quando o ViewModel é destruído
+        trackingJob?.cancel()
         _polylines.value = emptyList()
     }
 }

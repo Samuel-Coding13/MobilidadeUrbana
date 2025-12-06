@@ -26,14 +26,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.example.mobilidadeurbana.R
@@ -56,11 +53,10 @@ fun TelaHome(
     navController: NavController,
     viewModel: HomeViewModel = viewModel()
 ) {
-    val context = LocalContext.current.applicationContext
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val user = FirebaseAuth.getInstance().currentUser
-    val lifecycleOwner = LocalLifecycleOwner.current
 
     val azulPrincipal = Color(0xFF0066FF)
     val azulClaro = Color(0xFF00D4FF)
@@ -165,7 +161,6 @@ fun TelaHome(
                     marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                     marker.position = geo
 
-                    // Ícone do motorista com tamanho em dp
                     val motoristaIcon = createResizedIcon(R.drawable.ic_motorista_pin, 25, 25)
                     if (motoristaIcon != null) {
                         marker.icon = motoristaIcon
@@ -182,6 +177,7 @@ fun TelaHome(
                 }
                 map.invalidate()
 
+                // Atualiza no Firebase se estiver rastreando
                 if (isTracking) {
                     viewModel.updateLocationInFirebase(loc.latitude, loc.longitude, loc.speed)
                 }
@@ -189,32 +185,21 @@ fun TelaHome(
         }
     }
 
-    // Observa o ciclo de vida para manter o rastreamento ativo
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_RESUME -> {
-                    // Quando o app volta ao primeiro plano, garante que o rastreamento continua
-                    if (isTracking) {
-                        try {
-                            fusedClient.requestLocationUpdates(
-                                locationRequest,
-                                locationCallback,
-                                Looper.getMainLooper()
-                            )
-                        } catch (_: SecurityException) {}
-                    }
-                }
-                Lifecycle.Event.ON_PAUSE -> {
-                    // NÃO remove as atualizações quando o app vai para segundo plano
-                    // O rastreamento continua ativo
-                }
-                else -> {}
-            }
+    // Mantém a coleta de localização SEMPRE ativa
+    DisposableEffect(hasLocationPermission) {
+        if (hasLocationPermission) {
+            try {
+                fusedClient.requestLocationUpdates(
+                    locationRequest,
+                    locationCallback,
+                    Looper.getMainLooper()
+                )
+            } catch (_: SecurityException) {}
         }
-        lifecycleOwner.lifecycle.addObserver(observer)
+
         onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
+            // NÃO remove as atualizações - mantém rodando
+            // O ViewModel controla o envio ao Firebase
         }
     }
 
@@ -222,11 +207,9 @@ fun TelaHome(
     fun desenharRota(rota: com.example.mobilidadeurbana.viewmodel.Rota) {
         val map = mapViewRef ?: return
 
-        // Remove desenhos anteriores
         routePolyline?.let { map.overlays.remove(it) }
         paradaMarkers.forEach { map.overlays.remove(it) }
 
-        // Desenha a linha da rota
         if (rota.pontos.isNotEmpty()) {
             val polyline = Polyline(map)
             val geoPoints = rota.pontos.map { GeoPoint(it.lat, it.lng) }
@@ -251,7 +234,6 @@ fun TelaHome(
             }
         }
 
-        // Adiciona marcadores de paradas usando ic_bus_stop com tamanho em dp
         val busStopIcon = createResizedIcon(R.drawable.ic_bus_stop, 20, 20)
 
         val novosMarkers = rota.paradas.map { parada ->
@@ -272,7 +254,6 @@ fun TelaHome(
         map.invalidate()
     }
 
-    // Desenha rota quando selecionada
     LaunchedEffect(rotaSelecionada) {
         rotaSelecionada?.let { rota ->
             desenharRota(rota)
@@ -283,17 +264,12 @@ fun TelaHome(
         if (!hasLocationPermission) return
         if (rotaSelecionada == null) return
 
-        try {
-            fusedClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
-
-            currentLocation?.let { loc ->
-                viewModel.startTracking(loc.latitude, loc.longitude, loc.speed)
-            }
-        } catch (_: SecurityException) {}
+        currentLocation?.let { loc ->
+            viewModel.startTracking(loc.latitude, loc.longitude, loc.speed)
+        }
     }
 
     fun stopTracking() {
-        fusedClient.removeLocationUpdates(locationCallback)
         viewModel.stopTracking()
     }
 
@@ -312,7 +288,6 @@ fun TelaHome(
                     marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                     marker.position = geo
 
-                    // Ícone do motorista com tamanho em dp
                     val motoristaIcon = createResizedIcon(R.drawable.ic_motorista_pin, 32, 32)
                     if (motoristaIcon != null) {
                         marker.icon = motoristaIcon
@@ -337,7 +312,6 @@ fun TelaHome(
 
     DisposableEffect(Unit) {
         onDispose {
-            // Não para o rastreamento automaticamente ao destruir a tela
             mapViewRef = null
         }
     }
@@ -375,7 +349,6 @@ fun TelaHome(
                     selected = false,
                     onClick = {
                         scope.launch { drawerState.close() }
-                        // NÃO para o rastreamento ao navegar
                         navController.navigate("perfil")
                     },
                     icon = { Icon(Icons.Default.Person, contentDescription = "Perfil", tint = azulPrincipal) },
@@ -391,7 +364,6 @@ fun TelaHome(
                     selected = false,
                     onClick = {
                         scope.launch { drawerState.close() }
-                        // NÃO para o rastreamento ao navegar
                         navController.navigate("ouvidoria")
                     },
                     icon = { Icon(Icons.Default.Call, contentDescription = "Ouvidoria", tint = azulPrincipal) },
@@ -446,7 +418,6 @@ fun TelaHome(
                         val map = MapView(ctx).apply {
                             setMultiTouchControls(true)
                             controller.setZoom(16.0)
-                            // DESATIVA os botões de zoom padrão
                             setBuiltInZoomControls(false)
                         }
                         mapViewRef = map
@@ -519,7 +490,6 @@ fun TelaHome(
                     }
                 }
 
-                // Card da rota selecionada
                 rotaSelecionada?.let { rota ->
                     Card(
                         modifier = Modifier
@@ -555,7 +525,6 @@ fun TelaHome(
         }
     }
 
-    // Dialog de Status
     if (showStatusDialog) {
         AlertDialog(
             onDismissRequest = { showStatusDialog = false },
@@ -591,7 +560,6 @@ fun TelaHome(
         )
     }
 
-    // Dialog de Seleção de Rota
     if (showRotaDialog) {
         AlertDialog(
             onDismissRequest = { showRotaDialog = false },
@@ -653,7 +621,6 @@ fun TelaHome(
         )
     }
 
-    // Dialog de Confirmação
     if (showConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showConfirmDialog = false },
@@ -682,7 +649,6 @@ fun TelaHome(
         )
     }
 
-    // Dialog de Saída
     if (showExitDialog) {
         AlertDialog(
             onDismissRequest = { showExitDialog = false },
