@@ -2,33 +2,19 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- ========================================
-         PERMISSÕES NECESSÁRIAS
-         ======================================== -->
-
-    <!-- Permissão para acessar a internet -->
     <uses-permission android:name="android.permission.INTERNET" />
-
-    <!-- Permissão para acessar o estado da rede -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-
-    <!-- Permissão para escrever no armazenamento (cache de mapas) -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="32"
         tools:ignore="ScopedStorage" />
-
-    <!-- Permissão para ler do armazenamento -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
-
-    <!-- Permissões de localização -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-
-    <!-- Permissão para acessar localização em background (Android 10+) -->
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 
-    <!-- Features necessárias -->
     <uses-feature
         android:name="android.hardware.location.gps"
         android:required="false" />
@@ -50,7 +36,6 @@
         android:usesCleartextTraffic="true"
         tools:targetApi="31">
 
-        <!-- Activity principal -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -63,6 +48,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".service.LocationTrackingService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="location"
+            android:stopWithTask="false" />
 
     </application>
 

@@ -75,7 +75,6 @@ fun TelaHome(
 
     val statusOptions = listOf("Em operação", "Fora da rota", "Parado", "Manutenção", "Fora de serviço")
 
-    // Carrega rotas ao iniciar
     LaunchedEffect(Unit) {
         Configuration.getInstance().load(
             context,
@@ -85,21 +84,33 @@ fun TelaHome(
     }
 
     var hasLocationPermission by remember { mutableStateOf(false) }
+    var hasBackgroundPermission by remember { mutableStateOf(false) }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { perms ->
         hasLocationPermission =
             (perms[Manifest.permission.ACCESS_FINE_LOCATION] == true) ||
                     (perms[Manifest.permission.ACCESS_COARSE_LOCATION] == true)
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            hasBackgroundPermission = perms[Manifest.permission.ACCESS_BACKGROUND_LOCATION] == true
+        } else {
+            hasBackgroundPermission = true
+        }
     }
 
     LaunchedEffect(Unit) {
-        permissionLauncher.launch(
-            arrayOf(
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            )
+        val permissions = mutableListOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
         )
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            permissions.add(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+        }
+
+        permissionLauncher.launch(permissions.toTypedArray())
     }
 
     val nome = user?.displayName ?: user?.email ?: "usuário"
@@ -111,13 +122,11 @@ fun TelaHome(
     var routePolyline by remember { mutableStateOf<Polyline?>(null) }
     var paradaMarkers by remember { mutableStateOf<List<Marker>>(emptyList()) }
 
-    // Função para converter dp para pixels
     fun dpToPx(dp: Int): Int {
         val density = context.resources.displayMetrics.density
         return (dp * density).roundToInt()
     }
 
-    // Função para criar ícone redimensionado em dp
     fun createResizedIcon(drawableId: Int, widthDp: Int, heightDp: Int): BitmapDrawable? {
         return try {
             val drawable = ContextCompat.getDrawable(context, drawableId)
@@ -176,16 +185,10 @@ fun TelaHome(
                     map.controller.animateTo(geo)
                 }
                 map.invalidate()
-
-                // Atualiza no Firebase se estiver rastreando
-                if (isTracking) {
-                    viewModel.updateLocationInFirebase(loc.latitude, loc.longitude, loc.speed)
-                }
             }
         }
     }
 
-    // Mantém a coleta de localização SEMPRE ativa
     DisposableEffect(hasLocationPermission) {
         if (hasLocationPermission) {
             try {
@@ -198,12 +201,10 @@ fun TelaHome(
         }
 
         onDispose {
-            // NÃO remove as atualizações - mantém rodando
-            // O ViewModel controla o envio ao Firebase
+            fusedClient.removeLocationUpdates(locationCallback)
         }
     }
 
-    // Desenha a rota no mapa
     fun desenharRota(rota: com.example.mobilidadeurbana.viewmodel.Rota) {
         val map = mapViewRef ?: return
 
@@ -265,12 +266,12 @@ fun TelaHome(
         if (rotaSelecionada == null) return
 
         currentLocation?.let { loc ->
-            viewModel.startTracking(loc.latitude, loc.longitude, loc.speed)
+            viewModel.startTracking(context, loc.latitude, loc.longitude, loc.speed)
         }
     }
 
     fun stopTracking() {
-        viewModel.stopTracking()
+        viewModel.stopTracking(context)
     }
 
     fun fetchLastLocationAndCenter() {
@@ -513,7 +514,7 @@ fun TelaHome(
                             )
                             if (isTracking) {
                                 Text(
-                                    text = "Velocidade: ${String.format("%.1f", currentSpeed * 3.6f)} km/h",
+                                    text = "Rastreamento Ativo",
                                     color = Color.White,
                                     style = MaterialTheme.typography.bodySmall
                                 )
@@ -631,6 +632,22 @@ fun TelaHome(
                     Spacer(Modifier.height(12.dp))
                     Text("Rota: ${rotaSelecionada?.nome}", fontWeight = FontWeight.Bold, color = azulPrincipal)
                     Text("Status: $statusOnibus", fontWeight = FontWeight.Bold, color = azulPrincipal)
+
+                    if (!hasBackgroundPermission && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            "⚠️ Permissão de localização em segundo plano necessária para rastreamento contínuo",
+                            color = Color(0xFFFF9800),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        "Uma notificação permanecerá visível durante o rastreamento.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray
+                    )
                 }
             },
             confirmButton = {
