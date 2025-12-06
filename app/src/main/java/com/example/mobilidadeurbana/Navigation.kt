@@ -9,6 +9,7 @@ import com.example.mobilidadeurbana.view.*
 import com.example.mobilidadeurbana.view.administrador.TelaAdmin
 import com.example.mobilidadeurbana.view.administrador.TelaCriarMotorista
 import com.example.mobilidadeurbana.view.administrador.TelaCriarAdmin
+import com.example.mobilidadeurbana.view.administrador.TelaGerenciarOuvidoria
 import com.example.mobilidadeurbana.viewmodel.AuthViewModel
 import com.example.mobilidadeurbana.viewmodel.AdminViewModel
 
@@ -97,6 +98,13 @@ fun AppNavigation(
             TelaCriarAdmin(
                 onBack = { navController.popBackStack() },
                 viewModel = adminViewModel
+            )
+        }
+
+        // TELA DE GERENCIAR OUVIDORIAS (NOVA)
+        composable("admin/gerenciar-ouvidoria") {
+            TelaGerenciarOuvidoria(
+                onBack = { navController.popBackStack() }
             )
         }
     }

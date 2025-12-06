@@ -53,6 +53,9 @@ fun TelaAdmin(
                     title = { Text("Administração", color = Color.White, fontWeight = FontWeight.Bold) },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = azulPrincipal),
                     actions = {
+                        IconButton(onClick = { navController.navigate("admin/gerenciar-ouvidoria") }) {
+                            Icon(Icons.Default.Call, contentDescription = "Ouvidorias", tint = Color.White)
+                        }
                         TextButton(onClick = { showConfirmLogout = true }) {
                             Text("Sair", color = Color.White)
                         }
@@ -250,14 +253,12 @@ private fun ListaUsuarios(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceEvenly
                         ) {
-                            // Botão Editar
                             TextButton(onClick = { usuarioParaEditar = usuario }) {
                                 Icon(Icons.Default.Edit, contentDescription = "Editar", tint = azulPrincipal)
                                 Spacer(Modifier.width(4.dp))
                                 Text("Editar", color = azulPrincipal)
                             }
 
-                            // Botão Ativar/Desativar
                             TextButton(onClick = { usuarioParaToggle = usuario }) {
                                 Icon(
                                     if (usuario.ativo) Icons.Default.Close else Icons.Default.Check,
@@ -271,7 +272,6 @@ private fun ListaUsuarios(
                                 )
                             }
 
-                            // Botão Excluir
                             TextButton(onClick = { usuarioParaExcluir = usuario }) {
                                 Icon(Icons.Default.Delete, contentDescription = "Excluir", tint = Color.Red)
                                 Spacer(Modifier.width(4.dp))
@@ -284,7 +284,6 @@ private fun ListaUsuarios(
         }
     }
 
-    // Dialog de Edição
     usuarioParaEditar?.let { usuario ->
         DialogEditarUsuario(
             usuario = usuario,
@@ -309,7 +308,6 @@ private fun ListaUsuarios(
         )
     }
 
-    // Dialog de Exclusão
     usuarioParaExcluir?.let { usuario ->
         AlertDialog(
             onDismissRequest = { usuarioParaExcluir = null },
@@ -342,7 +340,6 @@ private fun ListaUsuarios(
         )
     }
 
-    // Dialog de Ativar/Desativar
     usuarioParaToggle?.let { usuario ->
         AlertDialog(
             onDismissRequest = { usuarioParaToggle = null },
