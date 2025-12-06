@@ -7,7 +7,6 @@ import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.GeoPoint
-import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -37,14 +36,6 @@ data class Rota(
     val paradas: List<Parada> = emptyList()
 )
 
-data class Veiculo(
-    val uid: String = "",
-    val lat: Double = 0.0,
-    val lng: Double = 0.0,
-    val status: String = "",
-    val rotaCodigo: String = ""
-)
-
 class HomeViewModel : ViewModel() {
 
     private val auth = FirebaseAuth.getInstance()
@@ -63,21 +54,12 @@ class HomeViewModel : ViewModel() {
     var rotas = mutableStateOf<List<Rota>>(emptyList())
         private set
 
-    var veiculos = mutableStateOf<List<Veiculo>>(emptyList())
-        private set
-
     // Polylines para o mapa
     private val _polylines = MutableStateFlow<List<Polyline>>(emptyList())
     val polylines: StateFlow<List<Polyline>> = _polylines.asStateFlow()
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
-
-    private var veiculosListener: ListenerRegistration? = null
-
-    init {
-        iniciarMonitoramentoVeiculos()
-    }
 
     /**
      * Define o status do ônibus
@@ -119,11 +101,6 @@ class HomeViewModel : ViewModel() {
 
     /**
      * Pega todas as rotas do Firestore
-     * Estrutura: /rotas/{docId}
-     *   - codigo: List<Map> com {lat, lng} (pontos da linha)
-     *   - cor: String
-     *   - nome: String
-     *   - paradas: List<Map> com {id, nome, lat, lng}
      */
     private suspend fun pegarRotas(): List<Rota> {
         return try {
@@ -139,7 +116,7 @@ class HomeViewModel : ViewModel() {
                     val nome = doc.getString("nome") ?: "Rota $codigo"
                     val cor = doc.getString("cor") ?: "#FF0000"
 
-                    // Pega os pontos que formam a LINHA da rota (campo "codigo")
+                    // Pega os pontos que formam a LINHA da rota
                     val pontosArray = doc.get("codigo") as? List<Map<String, Any>>
                     val pontos = pontosArray?.mapNotNull { ponto ->
                         val lng = (ponto["lng"] as? Number)?.toDouble()
@@ -149,7 +126,7 @@ class HomeViewModel : ViewModel() {
                         } else null
                     }?.takeIf { it.size >= 2 } ?: emptyList()
 
-                    // Pega as PARADAS (campo "paradas")
+                    // Pega as PARADAS
                     val paradasArray = doc.get("paradas") as? List<Map<String, Any>>
                     val paradas = paradasArray?.mapNotNull { parada ->
                         try {
@@ -192,7 +169,6 @@ class HomeViewModel : ViewModel() {
 
     /**
      * Gera as Polylines para exibição no mapa
-     * IMPORTANTE: Não cria marcadores para os pontos da linha
      */
     private fun gerarPolylines(rotas: List<Rota>): List<Polyline> {
         val novasLinhas = mutableListOf<Polyline>()
@@ -203,7 +179,6 @@ class HomeViewModel : ViewModel() {
             val polyline = Polyline().apply {
                 title = rota.nome
 
-                // Converte cor HEX para int
                 color = try {
                     android.graphics.Color.parseColor(rota.cor.uppercase())
                 } catch (e: Exception) {
@@ -214,7 +189,6 @@ class HomeViewModel : ViewModel() {
                 isGeodesic = true
             }
 
-            // Adiciona os pontos à polyline
             var pontosValidos = 0
             for (ponto in rota.pontos) {
                 polyline.addPoint(org.osmdroid.util.GeoPoint(ponto.lat, ponto.lng))
@@ -231,56 +205,9 @@ class HomeViewModel : ViewModel() {
     }
 
     /**
-     * Inicia o monitoramento de veículos em tempo real
-     * Estrutura: /onibus/{uid}
-     *   - lat, lng: localização
-     *   - status: status do veículo
-     *   - rotaCodigo: código da rota
-     */
-    private fun iniciarMonitoramentoVeiculos() {
-        veiculosListener?.remove()
-
-        veiculosListener = firestore
-            .collection("onibus")
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    Log.e("HOME_VM", "Erro ao monitorar veículos", error)
-                    return@addSnapshotListener
-                }
-
-                if (snapshot != null) {
-                    val listaVeiculos = snapshot.documents.mapNotNull { doc ->
-                        try {
-                            val uid = doc.getString("uid") ?: doc.id
-
-                            // Tenta pegar de diferentes formas
-                            val geoPoint = doc.getGeoPoint("localizacao")
-                            val lat = geoPoint?.latitude ?: doc.getDouble("lat") ?: 0.0
-                            val lng = geoPoint?.longitude ?: doc.getDouble("lng") ?: 0.0
-
-                            val status = doc.getString("status") ?: "Desconhecido"
-                            val rotaCodigo = doc.getString("rotaCodigo") ?: ""
-
-                            if (lat != 0.0 && lng != 0.0) {
-                                Veiculo(uid, lat, lng, status, rotaCodigo)
-                            } else null
-                        } catch (e: Exception) {
-                            Log.e("HOME_VM", "Erro ao processar veículo", e)
-                            null
-                        }
-                    }
-
-                    veiculos.value = listaVeiculos
-                    Log.d("HOME_VM", "Veículos atualizados: ${listaVeiculos.size}")
-                }
-            }
-    }
-
-    /**
      * Inicia o rastreamento do veículo
-     * Salva em: /onibus/{uid}
      */
-    fun startTracking(lat: Double, lng: Double) {
+    fun startTracking(lat: Double, lng: Double, velocidade: Float) {
         val user = auth.currentUser ?: return
         val rota = rotaSelecionada.value ?: return
 
@@ -293,6 +220,7 @@ class HomeViewModel : ViewModel() {
                     "lng" to lng,
                     "status" to statusOnibus.value,
                     "rotaCodigo" to rota.codigo,
+                    "velocidade" to velocidade,
                     "timestamp" to com.google.firebase.Timestamp.now()
                 )
 
@@ -335,7 +263,7 @@ class HomeViewModel : ViewModel() {
     /**
      * Atualiza a localização no Firebase durante o rastreamento
      */
-    fun updateLocationInFirebase(lat: Double, lng: Double) {
+    fun updateLocationInFirebase(lat: Double, lng: Double, velocidade: Float) {
         if (!isTracking.value) return
 
         val user = auth.currentUser ?: return
@@ -350,6 +278,7 @@ class HomeViewModel : ViewModel() {
                     "lng" to lng,
                     "status" to statusOnibus.value,
                     "rotaCodigo" to rota.codigo,
+                    "velocidade" to velocidade,
                     "timestamp" to com.google.firebase.Timestamp.now()
                 )
 
@@ -367,7 +296,6 @@ class HomeViewModel : ViewModel() {
 
     override fun onCleared() {
         super.onCleared()
-        veiculosListener?.remove()
         _polylines.value = emptyList()
     }
 }

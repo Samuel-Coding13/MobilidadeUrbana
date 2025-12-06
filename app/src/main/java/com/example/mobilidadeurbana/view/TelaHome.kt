@@ -4,6 +4,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.graphics.Paint
 import android.graphics.drawable.BitmapDrawable
+import android.location.Location
 import android.os.Looper
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -25,11 +26,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.graphics.drawable.toBitmap
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.example.mobilidadeurbana.R
@@ -42,6 +46,7 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("MissingPermission")
@@ -55,6 +60,7 @@ fun TelaHome(
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val user = FirebaseAuth.getInstance().currentUser
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     val azulPrincipal = Color(0xFF0066FF)
     val azulClaro = Color(0xFF00D4FF)
@@ -65,14 +71,13 @@ fun TelaHome(
     val rotaSelecionada by viewModel.rotaSelecionada
     val isTracking by viewModel.isTracking
     val rotas by viewModel.rotas
-    val veiculos by viewModel.veiculos
 
     var showStatusDialog by remember { mutableStateOf(false) }
     var showRotaDialog by remember { mutableStateOf(false) }
     var showConfirmDialog by remember { mutableStateOf(false) }
     var showExitDialog by remember { mutableStateOf(false) }
 
-    val statusOptions = listOf("Em operação", "Parado", "Manutenção", "Fora de serviço")
+    val statusOptions = listOf("Em operação", "Fora da rota", "Parado", "Manutenção", "Fora de serviço")
 
     // Carrega rotas ao iniciar
     LaunchedEffect(Unit) {
@@ -102,26 +107,55 @@ fun TelaHome(
     }
 
     val nome = user?.displayName ?: user?.email ?: "usuário"
-    val fusedClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+    val fusedClient = LocationServices.getFusedLocationProviderClient(context)
     var mapViewRef by remember { mutableStateOf<MapView?>(null) }
-    var currentLocation by remember { mutableStateOf<android.location.Location?>(null) }
+    var currentLocation by remember { mutableStateOf<Location?>(null) }
+    var currentSpeed by remember { mutableStateOf(0f) }
     var userMarker by remember { mutableStateOf<Marker?>(null) }
     var routePolyline by remember { mutableStateOf<Polyline?>(null) }
     var paradaMarkers by remember { mutableStateOf<List<Marker>>(emptyList()) }
-    var veiculoMarkers by remember { mutableStateOf<Map<String, Marker>>(emptyMap()) }
 
-    val locationRequest = remember {
-        LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000L)
-            .setMinUpdateDistanceMeters(2f)
-            .setMaxUpdateDelayMillis(5000L)
-            .build()
+    // Função para converter dp para pixels
+    fun dpToPx(dp: Int): Int {
+        val density = context.resources.displayMetrics.density
+        return (dp * density).roundToInt()
     }
+
+    // Função para criar ícone redimensionado em dp
+    fun createResizedIcon(drawableId: Int, widthDp: Int, heightDp: Int): BitmapDrawable? {
+        return try {
+            val drawable = ContextCompat.getDrawable(context, drawableId)
+            val bitmap = (drawable as? BitmapDrawable)?.bitmap
+            if (bitmap != null) {
+                val widthPx = dpToPx(widthDp)
+                val heightPx = dpToPx(heightDp)
+                val scaledBitmap = android.graphics.Bitmap.createScaledBitmap(
+                    bitmap,
+                    widthPx,
+                    heightPx,
+                    true
+                )
+                BitmapDrawable(context.resources, scaledBitmap)
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000L)
+        .setMinUpdateDistanceMeters(1f)
+        .setMaxUpdateDelayMillis(2000L)
+        .build()
 
     val locationCallback = remember {
         object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 val loc = result.lastLocation ?: return
                 currentLocation = loc
+                currentSpeed = loc.speed
+
                 val map = mapViewRef ?: return
                 val geo = GeoPoint(loc.latitude, loc.longitude)
 
@@ -131,15 +165,10 @@ fun TelaHome(
                     marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                     marker.position = geo
 
-                    // USA O ÍCONE ic_bus para o usuário em rastreamento
-                    try {
-                        val drawable = context.getDrawable(R.drawable.ic_bus)
-                        if (drawable != null) {
-                            val bitmap = drawable.toBitmap(50, 50) //Tamanho pixels
-                            marker.icon = BitmapDrawable(context.resources, bitmap)
-                        }
-                    } catch (e: Exception) {
-                        // Usa ícone padrão se não encontrar
+                    // Ícone do motorista com tamanho em dp
+                    val motoristaIcon = createResizedIcon(R.drawable.ic_motorista_pin, 25, 25)
+                    if (motoristaIcon != null) {
+                        marker.icon = motoristaIcon
                     }
 
                     map.overlays.add(marker)
@@ -154,9 +183,38 @@ fun TelaHome(
                 map.invalidate()
 
                 if (isTracking) {
-                    viewModel.updateLocationInFirebase(loc.latitude, loc.longitude)
+                    viewModel.updateLocationInFirebase(loc.latitude, loc.longitude, loc.speed)
                 }
             }
+        }
+    }
+
+    // Observa o ciclo de vida para manter o rastreamento ativo
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> {
+                    // Quando o app volta ao primeiro plano, garante que o rastreamento continua
+                    if (isTracking) {
+                        try {
+                            fusedClient.requestLocationUpdates(
+                                locationRequest,
+                                locationCallback,
+                                Looper.getMainLooper()
+                            )
+                        } catch (_: SecurityException) {}
+                    }
+                }
+                Lifecycle.Event.ON_PAUSE -> {
+                    // NÃO remove as atualizações quando o app vai para segundo plano
+                    // O rastreamento continua ativo
+                }
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
@@ -168,7 +226,7 @@ fun TelaHome(
         routePolyline?.let { map.overlays.remove(it) }
         paradaMarkers.forEach { map.overlays.remove(it) }
 
-        // Desenha a LINHA da rota (NÃO cria marcadores para estes pontos)
+        // Desenha a linha da rota
         if (rota.pontos.isNotEmpty()) {
             val polyline = Polyline(map)
             val geoPoints = rota.pontos.map { GeoPoint(it.lat, it.lng) }
@@ -187,30 +245,23 @@ fun TelaHome(
             map.overlays.add(polyline)
             routePolyline = polyline
 
-            // Centraliza no primeiro ponto
             if (geoPoints.isNotEmpty()) {
                 map.controller.setZoom(14.0)
                 map.controller.setCenter(geoPoints[0])
             }
         }
 
-        // Adiciona marcadores APENAS das PARADAS (com ícone ic_bus_stop redimensionado)
+        // Adiciona marcadores de paradas usando ic_bus_stop com tamanho em dp
+        val busStopIcon = createResizedIcon(R.drawable.ic_bus_stop, 20, 20)
+
         val novosMarkers = rota.paradas.map { parada ->
             val marker = Marker(map)
             marker.position = GeoPoint(parada.lat, parada.lng)
             marker.title = parada.nome
             marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
 
-            // USA O ÍCONE ic_bus_stop REDIMENSIONADO
-            try {
-                val drawable = context.getDrawable(R.drawable.ic_bus_stop)
-                if (drawable != null) {
-                    // Redimensiona o ícone para 48x48 pixels (tamanho adequado)
-                    val bitmap = drawable.toBitmap(48, 48)
-                    marker.icon = BitmapDrawable(context.resources, bitmap)
-                }
-            } catch (e: Exception) {
-                // Se não encontrar o ícone, usa o padrão
+            if (busStopIcon != null) {
+                marker.icon = busStopIcon
             }
 
             map.overlays.add(marker)
@@ -218,51 +269,6 @@ fun TelaHome(
         }
         paradaMarkers = novosMarkers
 
-        map.invalidate()
-    }
-
-    // Atualiza marcadores de veículos
-    LaunchedEffect(veiculos) {
-        val map = mapViewRef ?: return@LaunchedEffect
-        val currentUid = user?.uid
-
-        // Remove marcadores de veículos que não existem mais
-        val uidsAtuais = veiculos.map { it.uid }.toSet()
-        veiculoMarkers.forEach { (uid, marker) ->
-            if (uid !in uidsAtuais && uid != currentUid) {
-                map.overlays.remove(marker)
-            }
-        }
-
-        // Atualiza ou cria marcadores
-        val novosMarkers = mutableMapOf<String, Marker>()
-        veiculos.forEach { veiculo ->
-            if (veiculo.uid != currentUid) {
-                val marker = veiculoMarkers[veiculo.uid] ?: Marker(map).also {
-                    it.title = "Veículo - ${veiculo.status}"
-                    it.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-
-                    // Ícone para outros veículos
-                    try {
-                        val drawable = context.getDrawable(R.drawable.ic_bus)
-                        if (drawable != null) {
-                            val bitmap = drawable.toBitmap(50, 50)
-                            it.icon = BitmapDrawable(context.resources, bitmap)
-                        }
-                    } catch (e: Exception) {
-                        // Usa padrão
-                    }
-
-                    map.overlays.add(it)
-                }
-
-                marker.position = GeoPoint(veiculo.lat, veiculo.lng)
-                marker.title = "Veículo - ${veiculo.status}"
-                novosMarkers[veiculo.uid] = marker
-            }
-        }
-
-        veiculoMarkers = novosMarkers
         map.invalidate()
     }
 
@@ -281,7 +287,7 @@ fun TelaHome(
             fusedClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
 
             currentLocation?.let { loc ->
-                viewModel.startTracking(loc.latitude, loc.longitude)
+                viewModel.startTracking(loc.latitude, loc.longitude, loc.speed)
             }
         } catch (_: SecurityException) {}
     }
@@ -296,23 +302,20 @@ fun TelaHome(
         fusedClient.lastLocation.addOnSuccessListener { loc ->
             if (loc != null) {
                 currentLocation = loc
+                currentSpeed = loc.speed
                 val map = mapViewRef ?: return@addOnSuccessListener
                 val geo = GeoPoint(loc.latitude, loc.longitude)
+
                 if (userMarker == null) {
                     val marker = Marker(map)
                     marker.title = nome
                     marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                     marker.position = geo
 
-                    // Ícone ic_bus para usuário
-                    try {
-                        val drawable = context.getDrawable(R.drawable.ic_bus)
-                        if (drawable != null) {
-                            val bitmap = drawable.toBitmap(60, 60)
-                            marker.icon = BitmapDrawable(context.resources, bitmap)
-                        }
-                    } catch (e: Exception) {
-                        // Padrão
+                    // Ícone do motorista com tamanho em dp
+                    val motoristaIcon = createResizedIcon(R.drawable.ic_motorista_pin, 32, 32)
+                    if (motoristaIcon != null) {
+                        marker.icon = motoristaIcon
                     }
 
                     map.overlays.add(marker)
@@ -334,7 +337,7 @@ fun TelaHome(
 
     DisposableEffect(Unit) {
         onDispose {
-            stopTracking()
+            // Não para o rastreamento automaticamente ao destruir a tela
             mapViewRef = null
         }
     }
@@ -371,10 +374,8 @@ fun TelaHome(
                     label = { Text("Perfil", color = azulEscuro) },
                     selected = false,
                     onClick = {
-                        scope.launch {
-                            drawerState.close()
-                        }
-                        // Navega SEM parar o rastreamento
+                        scope.launch { drawerState.close() }
+                        // NÃO para o rastreamento ao navegar
                         navController.navigate("perfil")
                     },
                     icon = { Icon(Icons.Default.Person, contentDescription = "Perfil", tint = azulPrincipal) },
@@ -389,10 +390,8 @@ fun TelaHome(
                     label = { Text("Ouvidoria", color = azulEscuro) },
                     selected = false,
                     onClick = {
-                        scope.launch {
-                            drawerState.close()
-                        }
-                        // Navega SEM parar o rastreamento
+                        scope.launch { drawerState.close() }
+                        // NÃO para o rastreamento ao navegar
                         navController.navigate("ouvidoria")
                     },
                     icon = { Icon(Icons.Default.Call, contentDescription = "Ouvidoria", tint = azulPrincipal) },
@@ -414,7 +413,6 @@ fun TelaHome(
                         .fillMaxWidth()
                         .padding(16.dp)
                 ) {
-                    Icon(Icons.Default.ExitToApp, contentDescription = "Sair", tint = Color.Red)
                     Spacer(Modifier.width(12.dp))
                     Text("Sair da conta", color = Color.Red, style = MaterialTheme.typography.titleMedium)
                 }
@@ -448,6 +446,8 @@ fun TelaHome(
                         val map = MapView(ctx).apply {
                             setMultiTouchControls(true)
                             controller.setZoom(16.0)
+                            // DESATIVA os botões de zoom padrão
+                            setBuiltInZoomControls(false)
                         }
                         mapViewRef = map
                         map
@@ -519,6 +519,7 @@ fun TelaHome(
                     }
                 }
 
+                // Card da rota selecionada
                 rotaSelecionada?.let { rota ->
                     Card(
                         modifier = Modifier
@@ -532,12 +533,22 @@ fun TelaHome(
                             }
                         )
                     ) {
-                        Text(
-                            text = "Rota: ${rota.nome}",
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Column(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = "Rota: ${rota.nome}",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                            if (isTracking) {
+                                Text(
+                                    text = "Velocidade: ${String.format("%.1f", currentSpeed * 3.6f)} km/h",
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
                     }
                 }
             }
