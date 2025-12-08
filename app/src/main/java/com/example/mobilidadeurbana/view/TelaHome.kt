@@ -70,7 +70,8 @@ fun TelaHome(
 
     var showStatusDialog by remember { mutableStateOf(false) }
     var showRotaDialog by remember { mutableStateOf(false) }
-    var showConfirmDialog by remember { mutableStateOf(false) }
+    var showConfirmStartDialog by remember { mutableStateOf(false) }
+    var showConfirmStopDialog by remember { mutableStateOf(false) }
     var showExitDialog by remember { mutableStateOf(false) }
 
     val statusOptions = listOf("Em operação", "Fora da rota", "Parado", "Manutenção", "Fora de serviço")
@@ -289,7 +290,7 @@ fun TelaHome(
                     marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                     marker.position = geo
 
-                    val motoristaIcon = createResizedIcon(R.drawable.ic_motorista_pin, 32, 32)
+                    val motoristaIcon = createResizedIcon(R.drawable.ic_motorista_pin, 15, 15)
                     if (motoristaIcon != null) {
                         marker.icon = motoristaIcon
                     }
@@ -454,12 +455,12 @@ fun TelaHome(
                         FloatingActionButton(
                             onClick = {
                                 if (isTracking) {
-                                    stopTracking()
+                                    showConfirmStopDialog = true
                                 } else {
                                     if (rotaSelecionada == null) {
                                         // Mostrar mensagem
                                     } else {
-                                        showConfirmDialog = true
+                                        showConfirmStartDialog = true
                                     }
                                 }
                             },
@@ -622,9 +623,9 @@ fun TelaHome(
         )
     }
 
-    if (showConfirmDialog) {
+    if (showConfirmStartDialog) {
         AlertDialog(
-            onDismissRequest = { showConfirmDialog = false },
+            onDismissRequest = { showConfirmStartDialog = false },
             title = { Text("Confirmar Rastreamento", fontWeight = FontWeight.Bold) },
             text = {
                 Column {
@@ -652,15 +653,48 @@ fun TelaHome(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    showConfirmDialog = false
+                    showConfirmStartDialog = false
                     startTracking()
                 }) {
                     Text("SIM", color = Color(0xFF00C853), fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showConfirmDialog = false }) {
+                TextButton(onClick = { showConfirmStartDialog = false }) {
                     Text("NÃO", color = Color.Gray)
+                }
+            }
+        )
+    }
+
+    if (showConfirmStopDialog) {
+        AlertDialog(
+            onDismissRequest = { showConfirmStopDialog = false },
+            title = { Text("Parar Rastreamento", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text("Deseja realmente parar o rastreamento?")
+                    Spacer(Modifier.height(12.dp))
+                    Text("Rota: ${rotaSelecionada?.nome}", fontWeight = FontWeight.Bold, color = azulPrincipal)
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "O rastreamento será interrompido e suas informações serão removidas do sistema.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showConfirmStopDialog = false
+                    stopTracking()
+                }) {
+                    Text("SIM, PARAR", color = Color(0xFFD50000), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirmStopDialog = false }) {
+                    Text("CANCELAR", color = Color.Gray)
                 }
             }
         )
