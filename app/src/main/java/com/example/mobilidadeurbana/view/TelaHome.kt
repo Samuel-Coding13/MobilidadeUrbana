@@ -170,7 +170,7 @@ fun TelaHome(
                     marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                     marker.position = geo
 
-                    val motoristaIcon = createResizedIcon(R.drawable.ic_motorista_pin, 25, 25)
+                    val motoristaIcon = createResizedIcon(R.drawable.ic_motorista_pin, 15, 15)
                     if (motoristaIcon != null) {
                         marker.icon = motoristaIcon
                     }
@@ -235,7 +235,7 @@ fun TelaHome(
             }
         }
 
-        val busStopIcon = createResizedIcon(R.drawable.ic_bus_stop, 20, 20)
+        val busStopIcon = createResizedIcon(R.drawable.ic_bus_stop, 15, 15)
 
         val novosMarkers = rota.paradas.map { parada ->
             val marker = Marker(map)

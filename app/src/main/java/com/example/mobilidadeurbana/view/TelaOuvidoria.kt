@@ -1,5 +1,6 @@
 package com.example.mobilidadeurbana.view
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -20,7 +21,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
@@ -65,16 +65,21 @@ fun TelaOuvidoria(onBack: () -> Unit) {
     fun carregarOuvidorias() {
         scope.launch {
             isLoading = true
+
             try {
+                Log.d("TelaOuvidoria", "Iniciando carregamento para userId: ${user?.uid}")
+
+                // BUSCA TODAS AS OUVIDORIAS DO USUÁRIO SEM ORDENAÇÃO
                 val snapshot = firestore.collection("ouvidoria")
                     .whereEqualTo("userId", user?.uid ?: "")
-                    .orderBy("timestamp", Query.Direction.DESCENDING)
                     .get()
                     .await()
 
+                Log.d("TelaOuvidoria", "Documentos encontrados: ${snapshot.documents.size}")
+
                 val todas = snapshot.documents.mapNotNull { doc ->
                     try {
-                        OuvidoriaItem(
+                        val item = OuvidoriaItem(
                             id = doc.id,
                             categoria = doc.getString("categoria") ?: "",
                             titulo = doc.getString("titulo") ?: "",
@@ -91,15 +96,24 @@ fun TelaOuvidoria(onBack: () -> Unit) {
                             timestamp = doc.getTimestamp("timestamp"),
                             dataResposta = doc.getTimestamp("dataResposta")
                         )
+                        Log.d("TelaOuvidoria", "Ouvidoria: ${item.titulo} - Resolvido: ${item.resolvido}")
+                        item
                     } catch (e: Exception) {
+                        Log.e("TelaOuvidoria", "Erro ao processar documento ${doc.id}", e)
                         null
                     }
                 }
 
-                ouvidoriasPendentes = todas.filter { !it.resolvido }
-                ouvidoriasResolvidas = todas.filter { it.resolvido }
+                // ORDENA POR TIMESTAMP EM MEMÓRIA (MAIS RECENTE PRIMEIRO)
+                val todasOrdenadas = todas.sortedByDescending { it.timestamp?.seconds ?: 0 }
+
+                ouvidoriasPendentes = todasOrdenadas.filter { !it.resolvido }
+                ouvidoriasResolvidas = todasOrdenadas.filter { it.resolvido }
+
+                Log.d("TelaOuvidoria", "Pendentes: ${ouvidoriasPendentes.size}, Resolvidas: ${ouvidoriasResolvidas.size}")
+
             } catch (e: Exception) {
-                // Erro ao carregar
+                Log.e("TelaOuvidoria", "Erro ao carregar ouvidorias", e)
             } finally {
                 isLoading = false
             }
@@ -118,6 +132,13 @@ fun TelaOuvidoria(onBack: () -> Unit) {
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar", tint = Color.White)
+                        }
+                    },
+                    actions = {
+                        if (selectedTab != 2) {
+                            IconButton(onClick = { carregarOuvidorias() }) {
+                                Icon(Icons.Default.Refresh, contentDescription = "Atualizar", tint = Color.White)
+                            }
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = azulPrincipal)
@@ -236,6 +257,12 @@ fun ListaOuvidorias(
                 style = MaterialTheme.typography.titleMedium,
                 color = Color.Gray
             )
+            Spacer(Modifier.height(16.dp))
+            TextButton(onClick = onRefresh) {
+                Icon(Icons.Default.Refresh, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Atualizar")
+            }
         }
     } else {
         LazyColumn(
