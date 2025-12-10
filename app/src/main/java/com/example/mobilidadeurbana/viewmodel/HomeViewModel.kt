@@ -1,10 +1,13 @@
 package com.example.mobilidadeurbana.viewmodel
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import androidx.compose.runtime.mutableStateOf
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mobilidadeurbana.service.LocationTrackingService
@@ -55,6 +58,19 @@ class HomeViewModel : ViewModel() {
     var rotas = mutableStateOf<List<Rota>>(emptyList())
         private set
 
+    // Estados de permissão
+    var hasLocationPermission = mutableStateOf(false)
+        private set
+
+    var hasBackgroundPermission = mutableStateOf(false)
+        private set
+
+    var shouldShowPermissionRationale = mutableStateOf(false)
+        private set
+
+    var permissionDeniedPermanently = mutableStateOf(false)
+        private set
+
     private val _polylines = MutableStateFlow<List<Polyline>>(emptyList())
     val polylines: StateFlow<List<Polyline>> = _polylines.asStateFlow()
 
@@ -68,6 +84,82 @@ class HomeViewModel : ViewModel() {
     fun selecionarRota(rota: Rota) {
         rotaSelecionada.value = rota
         Log.d("HOME_VM", "Rota selecionada: ${rota.nome} (${rota.codigo})")
+    }
+
+    /**
+     * Verifica o status atual das permissões de localização
+     */
+    fun checkLocationPermissions(context: Context) {
+        val fineLocation = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
+        val coarseLocation = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
+        hasLocationPermission.value = fineLocation || coarseLocation
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            hasBackgroundPermission.value = ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_BACKGROUND_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            hasBackgroundPermission.value = true
+        }
+
+        Log.d("HOME_VM", "Permissões: location=$fineLocation, background=${hasBackgroundPermission.value}")
+    }
+
+    /**
+     * Atualiza o estado das permissões após solicitação
+     */
+    fun updatePermissionStatus(
+        locationGranted: Boolean,
+        backgroundGranted: Boolean
+    ) {
+        hasLocationPermission.value = locationGranted
+        hasBackgroundPermission.value = backgroundGranted
+
+        Log.d("HOME_VM", "Permissões atualizadas: location=$locationGranted, background=$backgroundGranted")
+    }
+
+    /**
+     * Define se deve mostrar justificativa de permissão
+     */
+    fun setShouldShowPermissionRationale(show: Boolean) {
+        shouldShowPermissionRationale.value = show
+    }
+
+    /**
+     * Define se a permissão foi negada permanentemente
+     */
+    fun setPermissionDeniedPermanently(denied: Boolean) {
+        permissionDeniedPermanently.value = denied
+    }
+
+    /**
+     * Verifica se pode iniciar o rastreamento (todas as permissões concedidas)
+     */
+    fun canStartTracking(): Boolean {
+        return hasLocationPermission.value && hasBackgroundPermission.value
+    }
+
+    /**
+     * Obtém a mensagem apropriada sobre o status das permissões
+     */
+    fun getPermissionMessage(): String {
+        return when {
+            !hasLocationPermission.value ->
+                "Permissão de localização necessária para rastreamento"
+            !hasBackgroundPermission.value && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q ->
+                "Permissão de localização em segundo plano necessária para rastreamento contínuo"
+            else ->
+                "Todas as permissões concedidas"
+        }
     }
 
     fun carregarRotas() {
@@ -187,6 +279,11 @@ class HomeViewModel : ViewModel() {
     }
 
     fun startTracking(context: Context, lat: Double, lng: Double, velocidade: Float) {
+        if (!canStartTracking()) {
+            Log.w("HOME_VM", "Tentativa de iniciar rastreamento sem permissões adequadas")
+            return
+        }
+
         val rota = rotaSelecionada.value ?: return
 
         val serviceIntent = Intent(context, LocationTrackingService::class.java).apply {

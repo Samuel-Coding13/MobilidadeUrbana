@@ -2,10 +2,13 @@ package com.example.mobilidadeurbana.view
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.graphics.Paint
 import android.graphics.drawable.BitmapDrawable
 import android.location.Location
+import android.net.Uri
 import android.os.Looper
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -30,6 +33,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -67,12 +71,16 @@ fun TelaHome(
     val rotaSelecionada by viewModel.rotaSelecionada
     val isTracking by viewModel.isTracking
     val rotas by viewModel.rotas
+    val hasLocationPermission by viewModel.hasLocationPermission
+    val hasBackgroundPermission by viewModel.hasBackgroundPermission
 
     var showStatusDialog by remember { mutableStateOf(false) }
     var showRotaDialog by remember { mutableStateOf(false) }
     var showConfirmStartDialog by remember { mutableStateOf(false) }
     var showConfirmStopDialog by remember { mutableStateOf(false) }
     var showExitDialog by remember { mutableStateOf(false) }
+    var showPermissionDialog by remember { mutableStateOf(false) }
+    var showPermissionDeniedDialog by remember { mutableStateOf(false) }
 
     val statusOptions = listOf("Em operação", "Fora da rota", "Parado", "Manutenção", "Fora de serviço")
 
@@ -82,26 +90,29 @@ fun TelaHome(
             androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)
         )
         viewModel.carregarRotas()
+        viewModel.checkLocationPermissions(context)
     }
-
-    var hasLocationPermission by remember { mutableStateOf(false) }
-    var hasBackgroundPermission by remember { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { perms ->
-        hasLocationPermission =
-            (perms[Manifest.permission.ACCESS_FINE_LOCATION] == true) ||
-                    (perms[Manifest.permission.ACCESS_COARSE_LOCATION] == true)
+        val locationGranted = (perms[Manifest.permission.ACCESS_FINE_LOCATION] == true) ||
+                (perms[Manifest.permission.ACCESS_COARSE_LOCATION] == true)
 
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-            hasBackgroundPermission = perms[Manifest.permission.ACCESS_BACKGROUND_LOCATION] == true
+        val backgroundGranted = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            perms[Manifest.permission.ACCESS_BACKGROUND_LOCATION] == true
         } else {
-            hasBackgroundPermission = true
+            true
+        }
+
+        viewModel.updatePermissionStatus(locationGranted, backgroundGranted)
+
+        if (!locationGranted || !backgroundGranted) {
+            showPermissionDeniedDialog = true
         }
     }
 
-    LaunchedEffect(Unit) {
+    fun requestPermissions() {
         val permissions = mutableListOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.ACCESS_COARSE_LOCATION
@@ -263,7 +274,10 @@ fun TelaHome(
     }
 
     fun startTracking() {
-        if (!hasLocationPermission) return
+        if (!viewModel.canStartTracking()) {
+            showPermissionDialog = true
+            return
+        }
         if (rotaSelecionada == null) return
 
         currentLocation?.let { loc ->
@@ -527,6 +541,123 @@ fun TelaHome(
         }
     }
 
+    // Diálogo de Permissão Necessária
+    if (showPermissionDialog) {
+        AlertDialog(
+            onDismissRequest = { showPermissionDialog = false },
+            icon = {
+                Icon(
+                    Icons.Default.LocationOn,
+                    contentDescription = null,
+                    tint = azulPrincipal,
+                    modifier = Modifier.size(48.dp)
+                )
+            },
+            title = { Text("Permissão Necessária", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text(
+                        "Para utilizar o rastreamento, é necessário conceder as seguintes permissões:",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(Modifier.height(16.dp))
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            if (hasLocationPermission) Icons.Default.CheckCircle else Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = if (hasLocationPermission) Color(0xFF00C853) else Color(0xFFFF9800),
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Localização precisa", style = MaterialTheme.typography.bodySmall)
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                if (hasBackgroundPermission) Icons.Default.CheckCircle else Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = if (hasBackgroundPermission) Color(0xFF00C853) else Color(0xFFFF9800),
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("Localização em segundo plano", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        "Essas permissões são necessárias para rastrear sua localização em tempo real enquanto você realiza o trajeto.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showPermissionDialog = false
+                    requestPermissions()
+                }) {
+                    Text("CONCEDER PERMISSÕES", color = azulPrincipal, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPermissionDialog = false }) {
+                    Text("CANCELAR", color = Color.Gray)
+                }
+            }
+        )
+    }
+
+    // Diálogo de Permissão Negada
+    if (showPermissionDeniedDialog) {
+        AlertDialog(
+            onDismissRequest = { showPermissionDeniedDialog = false },
+            icon = {
+                Icon(
+                    Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = Color(0xFFFF9800),
+                    modifier = Modifier.size(48.dp)
+                )
+            },
+            title = { Text("Permissões Não Concedidas", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text(
+                        "Algumas permissões não foram concedidas. O rastreamento pode não funcionar corretamente.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        "Você pode conceder as permissões manualmente nas configurações do aplicativo.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showPermissionDeniedDialog = false
+                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.fromParts("package", context.packageName, null)
+                    }
+                    context.startActivity(intent)
+                }) {
+                    Text("IR PARA CONFIGURAÇÕES", color = azulPrincipal, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPermissionDeniedDialog = false }) {
+                    Text("FECHAR", color = Color.Gray)
+                }
+            }
+        )
+    }
+
     if (showStatusDialog) {
         AlertDialog(
             onDismissRequest = { showStatusDialog = false },
@@ -634,10 +765,10 @@ fun TelaHome(
                     Text("Rota: ${rotaSelecionada?.nome}", fontWeight = FontWeight.Bold, color = azulPrincipal)
                     Text("Status: $statusOnibus", fontWeight = FontWeight.Bold, color = azulPrincipal)
 
-                    if (!hasBackgroundPermission && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    if (!viewModel.canStartTracking()) {
                         Spacer(Modifier.height(16.dp))
                         Text(
-                            "⚠️ Permissão de localização em segundo plano necessária para rastreamento contínuo",
+                            "⚠️ ${viewModel.getPermissionMessage()}",
                             color = Color(0xFFFF9800),
                             style = MaterialTheme.typography.bodySmall
                         )
