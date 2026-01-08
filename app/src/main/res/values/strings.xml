@@ -1,6 +1,6 @@
 <resources>
     <!-- Nome do aplicativo -->
-    <string name="app_name">OMBO-Motoristas</string>
+    <string name="app_name">Mobilidade Urbana</string>
 
     <!-- Telas -->
     <string name="login_title">Login</string>

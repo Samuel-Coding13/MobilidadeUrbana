@@ -33,7 +33,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -76,8 +75,7 @@ fun TelaHome(
 
     var showStatusDialog by remember { mutableStateOf(false) }
     var showRotaDialog by remember { mutableStateOf(false) }
-    var showConfirmStartDialog by remember { mutableStateOf(false) }
-    var showConfirmStopDialog by remember { mutableStateOf(false) }
+    var showConfirmDialog by remember { mutableStateOf(false) }
     var showExitDialog by remember { mutableStateOf(false) }
     var showPermissionDialog by remember { mutableStateOf(false) }
     var showPermissionDeniedDialog by remember { mutableStateOf(false) }
@@ -304,7 +302,7 @@ fun TelaHome(
                     marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                     marker.position = geo
 
-                    val motoristaIcon = createResizedIcon(R.drawable.ic_motorista_pin, 15, 15)
+                    val motoristaIcon = createResizedIcon(R.drawable.ic_motorista_pin, 32, 32)
                     if (motoristaIcon != null) {
                         marker.icon = motoristaIcon
                     }
@@ -469,12 +467,12 @@ fun TelaHome(
                         FloatingActionButton(
                             onClick = {
                                 if (isTracking) {
-                                    showConfirmStopDialog = true
+                                    stopTracking()
                                 } else {
                                     if (rotaSelecionada == null) {
                                         // Mostrar mensagem
                                     } else {
-                                        showConfirmStartDialog = true
+                                        showConfirmDialog = true
                                     }
                                 }
                             },
@@ -754,9 +752,9 @@ fun TelaHome(
         )
     }
 
-    if (showConfirmStartDialog) {
+    if (showConfirmDialog) {
         AlertDialog(
-            onDismissRequest = { showConfirmStartDialog = false },
+            onDismissRequest = { showConfirmDialog = false },
             title = { Text("Confirmar Rastreamento", fontWeight = FontWeight.Bold) },
             text = {
                 Column {
@@ -784,48 +782,15 @@ fun TelaHome(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    showConfirmStartDialog = false
+                    showConfirmDialog = false
                     startTracking()
                 }) {
                     Text("SIM", color = Color(0xFF00C853), fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showConfirmStartDialog = false }) {
+                TextButton(onClick = { showConfirmDialog = false }) {
                     Text("NÃO", color = Color.Gray)
-                }
-            }
-        )
-    }
-
-    if (showConfirmStopDialog) {
-        AlertDialog(
-            onDismissRequest = { showConfirmStopDialog = false },
-            title = { Text("Parar Rastreamento", fontWeight = FontWeight.Bold) },
-            text = {
-                Column {
-                    Text("Deseja realmente parar o rastreamento?")
-                    Spacer(Modifier.height(12.dp))
-                    Text("Rota: ${rotaSelecionada?.nome}", fontWeight = FontWeight.Bold, color = azulPrincipal)
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        "O rastreamento será interrompido e suas informações serão removidas do sistema.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.Gray
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    showConfirmStopDialog = false
-                    stopTracking()
-                }) {
-                    Text("SIM, PARAR", color = Color(0xFFD50000), fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showConfirmStopDialog = false }) {
-                    Text("CANCELAR", color = Color.Gray)
                 }
             }
         )
