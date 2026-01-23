@@ -36,7 +36,6 @@ fun TelaDeLogin(
 
     val mensagem by viewModel.mensagem
 
-    // CORES AZUIS
     val azulPrincipal = Color(0xFF0066FF)
     val azulClaro = Color(0xFF00D4FF)
     val azulEscuro = Color(0xFF003366)
@@ -175,7 +174,6 @@ fun TelaDeLogin(
         }
     }
 
-    // Dialog de Reset de Senha
     if (showResetDialog) {
         AlertDialog(
             onDismissRequest = { showResetDialog = false },

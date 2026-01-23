@@ -27,7 +27,6 @@ import com.google.firebase.auth.FirebaseAuth
 fun TelaPerfil(onBack: () -> Unit) {
     val user = FirebaseAuth.getInstance().currentUser
 
-    // CORES AZUIS
     val azulPrincipal = Color(0xFF0066FF)
     val azulEscuro = Color(0xFF003366)
 

@@ -111,10 +111,8 @@ class LocationTrackingService : Service() {
         Log.d("LocationService", "Iniciando rastreamento")
         isTracking = true
 
-        // Inicia serviço em foreground
         startForeground(NOTIFICATION_ID, createNotification())
 
-        // Envia informações iniciais
         val location = Location("initial").apply {
             latitude = lat
             longitude = lng
@@ -213,7 +211,6 @@ class LocationTrackingService : Service() {
             // Dados completos para ambos os bancos
             val timestamp = System.currentTimeMillis()
 
-            // REALTIME DATABASE - dados completos
             val realtimeData = hashMapOf<String, Any>(
                 "uid" to user.uid,
                 "status" to statusOnibus,

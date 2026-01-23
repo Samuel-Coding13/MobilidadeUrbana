@@ -111,7 +111,7 @@ fun TelaGerenciarOuvidoria(onBack: () -> Unit) {
                 ouvidoriasPendentes = todas.filter { !it.resolvido }
                 ouvidoriasResolvidas = todas.filter { it.resolvido }
             } catch (e: Exception) {
-                // Erro ao carregar
+
             } finally {
                 isLoading = false
             }

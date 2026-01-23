@@ -21,9 +21,9 @@ class AuthViewModel : ViewModel() {
         mensagem.value = ""
     }
 
-    /**
-     * Login com verificação de nível de acesso 2 (motorista) ou 3 (admin)
-     */
+
+    // Login com verificação de nível de acesso 2 (motorista) ou 3 (admin)
+
     fun loginUsuario(email: String, senha: String, onSuccess: (Boolean) -> Unit) {
         if (email.isBlank() || senha.isBlank()) {
             mostrarMensagem("Preencha todos os campos.")

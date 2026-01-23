@@ -5,10 +5,6 @@ import com.google.firebase.FirebaseApp
 import org.osmdroid.config.Configuration
 import java.io.File
 
-/**
- * Classe de aplicação principal
- * Inicializa Firebase e configurações do OSMDroid
- */
 class MyApp : Application() {
 
     override fun onCreate() {

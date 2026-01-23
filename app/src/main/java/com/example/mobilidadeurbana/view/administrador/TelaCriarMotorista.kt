@@ -34,7 +34,6 @@ fun TelaCriarMotorista(
     var mensagem by remember { mutableStateOf("") }
     val isLoading by viewModel.isLoading
 
-    // CORES AZUIS
     val azulPrincipal = Color(0xFF0066FF)
     val azulEscuro = Color(0xFF003366)
 

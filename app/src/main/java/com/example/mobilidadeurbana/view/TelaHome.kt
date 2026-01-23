@@ -565,7 +565,6 @@ fun TelaHome(
         }
     }
 
-    // Diálogo de Permissão Necessária
     if (showPermissionDialog) {
         AlertDialog(
             onDismissRequest = { showPermissionDialog = false },

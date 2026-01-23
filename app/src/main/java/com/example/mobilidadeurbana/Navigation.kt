@@ -25,13 +25,10 @@ fun AppNavigation(
         navController = navController,
         startDestination = startDestination
     ) {
-        // TELA DE LOGIN
         composable("login") {
             TelaDeLogin(
                 viewModel = authViewModel,
-                onNavigateToCadastro = {
-                    // Implementar tela de cadastro se necessário
-                },
+                onNavigateToCadastro = {},
                 onLoginSuccess = { isAdmin ->
                     if (isAdmin) {
                         navController.navigate("admin") {
@@ -46,7 +43,6 @@ fun AppNavigation(
             )
         }
 
-        // TELA DO MOTORISTA (HOME)
         composable("home") {
             TelaHome(
                 onLogout = {
@@ -58,21 +54,18 @@ fun AppNavigation(
             )
         }
 
-        // TELA DE PERFIL
         composable("perfil") {
             TelaPerfil(
                 onBack = { navController.popBackStack() }
             )
         }
 
-        // TELA DE OUVIDORIA
         composable("ouvidoria") {
             TelaOuvidoria(
                 onBack = { navController.popBackStack() }
             )
         }
 
-        // TELA PRINCIPAL DO ADMINISTRADOR
         composable("admin") {
             TelaAdmin(
                 onLogout = {
@@ -85,7 +78,6 @@ fun AppNavigation(
             )
         }
 
-        // TELA DE CRIAR MOTORISTA
         composable("admin/criar-motorista") {
             TelaCriarMotorista(
                 onBack = { navController.popBackStack() },
@@ -93,7 +85,6 @@ fun AppNavigation(
             )
         }
 
-        // TELA DE CRIAR ADMINISTRADOR
         composable("admin/criar-admin") {
             TelaCriarAdmin(
                 onBack = { navController.popBackStack() },
@@ -101,7 +92,6 @@ fun AppNavigation(
             )
         }
 
-        // TELA DE GERENCIAR OUVIDORIAS (NOVA)
         composable("admin/gerenciar-ouvidoria") {
             TelaGerenciarOuvidoria(
                 onBack = { navController.popBackStack() }

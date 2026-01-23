@@ -85,9 +85,8 @@ class HomeViewModel : ViewModel() {
         }
     }
 
-    /**
-     * Verifica o status atual das permissões de localização
-     */
+    // Verifica o status atual das permissões de localização
+
     fun checkLocationPermissions(context: Context) {
         val fineLocation = ContextCompat.checkSelfPermission(
             context,
@@ -113,9 +112,8 @@ class HomeViewModel : ViewModel() {
         Log.d("HOME_VM", "Permissões verificadas: location=${hasLocationPermission.value}, background=${hasBackgroundPermission.value}")
     }
 
-    /**
-     * Atualiza o estado das permissões após solicitação
-     */
+    // Atualiza o estado das permissões após solicitação
+
     fun updatePermissionStatus(
         locationGranted: Boolean,
         backgroundGranted: Boolean
@@ -126,18 +124,14 @@ class HomeViewModel : ViewModel() {
         Log.d("HOME_VM", "Permissões atualizadas: location=$locationGranted, background=$backgroundGranted")
     }
 
-    /**
-     * Verifica se pode iniciar o rastreamento (todas as permissões concedidas)
-     */
+    // Verifica se pode iniciar o rastreamento (todas as permissões concedidas)
+
     fun canStartTracking(): Boolean {
         val canStart = hasLocationPermission.value && hasBackgroundPermission.value
         Log.d("HOME_VM", "Pode iniciar tracking: $canStart (location=${hasLocationPermission.value}, background=${hasBackgroundPermission.value})")
         return canStart
     }
 
-    /**
-     * Obtém a mensagem apropriada sobre o status das permissões
-     */
     fun getPermissionMessage(): String {
         return when {
             !hasLocationPermission.value ->
@@ -267,13 +261,11 @@ class HomeViewModel : ViewModel() {
     fun startTracking(context: Context, lat: Double, lng: Double, velocidade: Float) {
         Log.d("HOME_VM", "=== INICIANDO RASTREAMENTO ===")
 
-        // Verifica permissões
         if (!canStartTracking()) {
             Log.e("HOME_VM", "✗ Permissões insuficientes")
             return
         }
 
-        // Verifica rota selecionada
         val rota = rotaSelecionada.value
         if (rota == null) {
             Log.e("HOME_VM", "✗ Nenhuma rota selecionada")

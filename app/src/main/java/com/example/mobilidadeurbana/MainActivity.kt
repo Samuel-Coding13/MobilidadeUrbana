@@ -71,7 +71,6 @@ fun SplashWithPersistentAuth(
     var isChecking by remember { mutableStateOf(true) }
     var hasInternet by remember { mutableStateOf<Boolean?>(null) }
 
-    // CORES AZUIS
     val azulPrincipal = Color(0xFF0066FF)
     val azulEscuro = Color(0xFF003366)
     val azulClaro = Color(0xFF00D4FF)

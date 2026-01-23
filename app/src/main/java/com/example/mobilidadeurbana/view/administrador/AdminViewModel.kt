@@ -40,9 +40,7 @@ class AdminViewModel : ViewModel() {
         mensagem.value = ""
     }
 
-    /**
-     * Carrega lista de motoristas (acesso = 2)
-     */
+
     suspend fun carregarMotoristas() {
         isLoading.value = true
         try {
@@ -67,9 +65,7 @@ class AdminViewModel : ViewModel() {
         }
     }
 
-    /**
-     * Carrega lista de administradores (acesso = 3)
-     */
+
     suspend fun carregarAdministradores() {
         isLoading.value = true
         try {
@@ -94,9 +90,7 @@ class AdminViewModel : ViewModel() {
         }
     }
 
-    /**
-     * Cria novo motorista (acesso = 2)
-     */
+
     fun cadastrarMotorista(
         nome: String,
         email: String,
@@ -107,9 +101,7 @@ class AdminViewModel : ViewModel() {
         cadastrarUsuario(nome, email, senha, 2, onSuccess, onError)
     }
 
-    /**
-     * Cria novo administrador (acesso = 3)
-     */
+
     fun cadastrarAdministrador(
         nome: String,
         email: String,
@@ -120,9 +112,7 @@ class AdminViewModel : ViewModel() {
         cadastrarUsuario(nome, email, senha, 3, onSuccess, onError)
     }
 
-    /**
-     * Função genérica para cadastrar usuário
-     */
+
     private fun cadastrarUsuario(
         nome: String,
         email: String,
@@ -210,9 +200,7 @@ class AdminViewModel : ViewModel() {
             }
     }
 
-    /**
-     * Atualiza dados de um usuário
-     */
+
     fun atualizarUsuario(
         uid: String,
         nome: String,
@@ -271,9 +259,7 @@ class AdminViewModel : ViewModel() {
             }
     }
 
-    /**
-     * Exclui um usuário
-     */
+
     fun excluirUsuario(uid: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
         isLoading.value = true
 
