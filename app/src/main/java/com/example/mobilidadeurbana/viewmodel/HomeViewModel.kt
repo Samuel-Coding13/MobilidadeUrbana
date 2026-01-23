@@ -86,20 +86,16 @@ class HomeViewModel : ViewModel() {
     }
 
     // Verifica o status atual das permissões de localização
-
     fun checkLocationPermissions(context: Context) {
         val fineLocation = ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
-
         val coarseLocation = ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.ACCESS_COARSE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
-
         hasLocationPermission.value = fineLocation || coarseLocation
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             hasBackgroundPermission.value = ContextCompat.checkSelfPermission(
                 context,
@@ -108,12 +104,10 @@ class HomeViewModel : ViewModel() {
         } else {
             hasBackgroundPermission.value = true
         }
-
-        Log.d("HOME_VM", "Permissões verificadas: location=${hasLocationPermission.value}, background=${hasBackgroundPermission.value}")
+        Log.d("HOME_VM", "Permissões: location=$fineLocation, background=${hasBackgroundPermission.value}!")
     }
 
     // Atualiza o estado das permissões após solicitação
-
     fun updatePermissionStatus(
         locationGranted: Boolean,
         backgroundGranted: Boolean
@@ -125,7 +119,6 @@ class HomeViewModel : ViewModel() {
     }
 
     // Verifica se pode iniciar o rastreamento (todas as permissões concedidas)
-
     fun canStartTracking(): Boolean {
         val canStart = hasLocationPermission.value && hasBackgroundPermission.value
         Log.d("HOME_VM", "Pode iniciar tracking: $canStart (location=${hasLocationPermission.value}, background=${hasBackgroundPermission.value})")
@@ -259,25 +252,11 @@ class HomeViewModel : ViewModel() {
     }
 
     fun startTracking(context: Context, lat: Double, lng: Double, velocidade: Float) {
-        Log.d("HOME_VM", "=== INICIANDO RASTREAMENTO ===")
-
         if (!canStartTracking()) {
-            Log.e("HOME_VM", "✗ Permissões insuficientes")
+            Log.w("HOME_VM", "Tentativa de iniciar rastreamento sem permissões adequadas!")
             return
         }
-
-        val rota = rotaSelecionada.value
-        if (rota == null) {
-            Log.e("HOME_VM", "✗ Nenhuma rota selecionada")
-            return
-        }
-
-        Log.d("HOME_VM", "✓ Rota: ${rota.nome} (${rota.codigo})")
-        Log.d("HOME_VM", "✓ Status: ${statusOnibus.value}")
-        Log.d("HOME_VM", "✓ Localização: $lat, $lng")
-        Log.d("HOME_VM", "✓ Velocidade: $velocidade")
-
-        // Cria intent para o serviço
+        val rota = rotaSelecionada.value ?: return
         val serviceIntent = Intent(context, LocationTrackingService::class.java).apply {
             action = LocationTrackingService.ACTION_START_TRACKING
             putExtra(LocationTrackingService.EXTRA_ROTA_CODIGO, rota.codigo)
@@ -286,23 +265,13 @@ class HomeViewModel : ViewModel() {
             putExtra(LocationTrackingService.EXTRA_LNG, lng)
             putExtra(LocationTrackingService.EXTRA_VELOCIDADE, velocidade)
         }
-
-        try {
-            // Inicia o serviço
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(serviceIntent)
-            } else {
-                context.startService(serviceIntent)
-            }
-
-            // Atualiza estado
-            isTracking.value = true
-            Log.d("HOME_VM", "✓ Serviço iniciado com sucesso")
-
-        } catch (e: Exception) {
-            Log.e("HOME_VM", "✗ Erro ao iniciar serviço", e)
-            isTracking.value = false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            context.startForegroundService(serviceIntent)
+        } else {
+            context.startService(serviceIntent)
         }
+        isTracking.value = true
+        Log.d("HOME_VM", "Rastreamento iniciado via serviço na rota ${rota.codigo}!")
     }
 
     fun stopTracking(context: Context) {

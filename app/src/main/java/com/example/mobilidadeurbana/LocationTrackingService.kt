@@ -204,14 +204,11 @@ class LocationTrackingService : Service() {
             Log.w("LocationService", "Não pode atualizar: user=$user, tracking=$isTracking, rota=$rotaCodigo")
             return
         }
-
+        // Obtém o endereço em uma coroutine
         serviceScope.launch {
             val endereco = getAddressFromLocation(location.latitude, location.longitude)
-
-            // Dados completos para ambos os bancos
-            val timestamp = System.currentTimeMillis()
-
-            val realtimeData = hashMapOf<String, Any>(
+            // Atualiza TUDO na coleção onibus no Realtime Database
+            val onibusData = hashMapOf<String, Any>(
                 "uid" to user.uid,
                 "status" to statusOnibus,
                 "rotaCodigo" to rotaCodigo!!,
@@ -221,37 +218,14 @@ class LocationTrackingService : Service() {
                 "velocidade" to location.speed,
                 "timestamp" to ServerValue.TIMESTAMP
             )
-
             realtimeDatabase.getReference("onibus")
                 .child(user.uid)
-                .setValue(realtimeData)
+                .setValue(onibusData)
                 .addOnSuccessListener {
-                    Log.d("LocationService", "✓ Realtime Database atualizado")
+                    Log.d("LocationService", "Informações completas atualizadas no Realtime Database: $endereco")
                 }
                 .addOnFailureListener { e ->
-                    Log.e("LocationService", "✗ Erro no Realtime Database", e)
-                }
-
-            // FIRESTORE - dados do veículo
-            val firestoreData = hashMapOf<String, Any>(
-                "uid" to user.uid,
-                "status" to statusOnibus,
-                "rotaCodigo" to rotaCodigo!!,
-                "lat" to location.latitude,
-                "lng" to location.longitude,
-                "localizacao" to endereco,
-                "velocidade" to location.speed,
-                "timestamp" to com.google.firebase.Timestamp.now()
-            )
-
-            firestore.collection("onibus")
-                .document(user.uid)
-                .set(firestoreData)
-                .addOnSuccessListener {
-                    Log.d("LocationService", "✓ Firestore atualizado")
-                }
-                .addOnFailureListener { e ->
-                    Log.e("LocationService", "✗ Erro no Firestore", e)
+                    Log.e("LocationService", "Erro ao atualizar informações no Realtime Database", e)
                 }
         }
     }
