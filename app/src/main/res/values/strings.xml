@@ -1,6 +1,6 @@
 <resources>
     <!-- Nome do aplicativo -->
-    <string name="app_name">Mobilidade Urbana</string>
+    <string name="app_name">OMBO-Motoristas</string>
 
     <!-- Telas -->
     <string name="login_title">Login</string>
@@ -41,8 +41,17 @@
     <string name="hello">Olá, %s!</string>
     <string name="latitude">Latitude: %s</string>
     <string name="longitude">Longitude: %s</string>
-    <string name="start_tracking">Iniciar rastreamento</string>
-    <string name="stop_tracking">Parar rastreamento</string>
+    <string name="service_description">Rastreia a localização do ônibus em tempo real durante o trajeto</string>
+    <string name="tracking_notification_title">Rastreamento Ativo</string>
+    <string name="tracking_notification_text">Rota: %1$s - Status: %2$s</string>
+    <string name="error_no_location_permission">Permissão de localização necessária</string>
+    <string name="error_no_background_permission">Permissão de localização em segundo plano necessária</string>
+    <string name="error_no_route_selected">Selecione uma rota antes de iniciar o rastreamento</string>
+    <string name="error_location_unavailable">Localização não disponível. Verifique se o GPS está ativo.</string>
+
+    <!-- Mensagens de sucesso -->
+    <string name="tracking_started">Rastreamento iniciado com sucesso</string>
+    <string name="tracking_stopped">Rastreamento parado</string>
 
     <!-- Splash -->
     <string name="checking_connection">Verificando conexão...</string>

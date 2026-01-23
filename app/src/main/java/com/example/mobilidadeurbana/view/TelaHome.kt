@@ -9,6 +9,7 @@ import android.location.Location
 import android.net.Uri
 import android.os.Looper
 import android.provider.Settings
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -75,7 +76,8 @@ fun TelaHome(
 
     var showStatusDialog by remember { mutableStateOf(false) }
     var showRotaDialog by remember { mutableStateOf(false) }
-    var showConfirmDialog by remember { mutableStateOf(false) }
+    var showConfirmStartDialog by remember { mutableStateOf(false) }
+    var showConfirmStopDialog by remember { mutableStateOf(false) }
     var showExitDialog by remember { mutableStateOf(false) }
     var showPermissionDialog by remember { mutableStateOf(false) }
     var showPermissionDeniedDialog by remember { mutableStateOf(false) }
@@ -272,18 +274,35 @@ fun TelaHome(
     }
 
     fun startTracking() {
+        Log.d("TelaHome", "=== startTracking CHAMADO ===")
+
         if (!viewModel.canStartTracking()) {
+            Log.e("TelaHome", "✗ Sem permissões adequadas")
             showPermissionDialog = true
             return
         }
-        if (rotaSelecionada == null) return
 
-        currentLocation?.let { loc ->
-            viewModel.startTracking(context, loc.latitude, loc.longitude, loc.speed)
+        if (rotaSelecionada == null) {
+            Log.e("TelaHome", "✗ Nenhuma rota selecionada")
+            return
         }
+
+        val loc = currentLocation
+        if (loc == null) {
+            Log.e("TelaHome", "✗ Localização não disponível")
+            return
+        }
+
+        Log.d("TelaHome", "✓ Iniciando rastreamento")
+        Log.d("TelaHome", "  - Rota: ${rotaSelecionada?.nome}")
+        Log.d("TelaHome", "  - Status: $statusOnibus")
+        Log.d("TelaHome", "  - Lat/Lng: ${loc.latitude}, ${loc.longitude}")
+
+        viewModel.startTracking(context, loc.latitude, loc.longitude, loc.speed)
     }
 
     fun stopTracking() {
+        Log.d("TelaHome", "=== stopTracking CHAMADO ===")
         viewModel.stopTracking(context)
     }
 
@@ -302,7 +321,7 @@ fun TelaHome(
                     marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                     marker.position = geo
 
-                    val motoristaIcon = createResizedIcon(R.drawable.ic_motorista_pin, 32, 32)
+                    val motoristaIcon = createResizedIcon(R.drawable.ic_motorista_pin, 15, 15)
                     if (motoristaIcon != null) {
                         marker.icon = motoristaIcon
                     }
@@ -466,13 +485,20 @@ fun TelaHome(
 
                         FloatingActionButton(
                             onClick = {
+                                Log.d("TelaHome", "Botão central clicado - isTracking: $isTracking")
+
                                 if (isTracking) {
-                                    stopTracking()
+                                    Log.d("TelaHome", "Mostrando diálogo de parar")
+                                    showConfirmStopDialog = true
                                 } else {
                                     if (rotaSelecionada == null) {
-                                        // Mostrar mensagem
+                                        Log.e("TelaHome", "Nenhuma rota selecionada")
+                                    } else if (!viewModel.canStartTracking()) {
+                                        Log.e("TelaHome", "Sem permissões")
+                                        showPermissionDialog = true
                                     } else {
-                                        showConfirmDialog = true
+                                        Log.d("TelaHome", "Mostrando diálogo de iniciar")
+                                        showConfirmStartDialog = true
                                     }
                                 }
                             },
@@ -752,9 +778,9 @@ fun TelaHome(
         )
     }
 
-    if (showConfirmDialog) {
+    if (showConfirmStartDialog) {
         AlertDialog(
-            onDismissRequest = { showConfirmDialog = false },
+            onDismissRequest = { showConfirmStartDialog = false },
             title = { Text("Confirmar Rastreamento", fontWeight = FontWeight.Bold) },
             text = {
                 Column {
@@ -781,16 +807,61 @@ fun TelaHome(
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    showConfirmDialog = false
-                    startTracking()
-                }) {
+                TextButton(
+                    onClick = {
+                        Log.d("TelaHome", "Usuário confirmou início do rastreamento")
+                        showConfirmStartDialog = false
+                        startTracking()
+                    }
+                ) {
                     Text("SIM", color = Color(0xFF00C853), fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showConfirmDialog = false }) {
+                TextButton(onClick = {
+                    Log.d("TelaHome", "Usuário cancelou início do rastreamento")
+                    showConfirmStartDialog = false
+                }) {
                     Text("NÃO", color = Color.Gray)
+                }
+            }
+        )
+    }
+
+    if (showConfirmStopDialog) {
+        AlertDialog(
+            onDismissRequest = { showConfirmStopDialog = false },
+            title = { Text("Parar Rastreamento", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text("Deseja realmente parar o rastreamento?")
+                    Spacer(Modifier.height(12.dp))
+                    Text("Rota: ${rotaSelecionada?.nome}", fontWeight = FontWeight.Bold, color = azulPrincipal)
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "O rastreamento será interrompido e suas informações serão removidas do sistema.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        Log.d("TelaHome", "Usuário confirmou parada do rastreamento")
+                        showConfirmStopDialog = false
+                        stopTracking()
+                    }
+                ) {
+                    Text("SIM, PARAR", color = Color(0xFFD50000), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    Log.d("TelaHome", "Usuário cancelou parada do rastreamento")
+                    showConfirmStopDialog = false
+                }) {
+                    Text("CANCELAR", color = Color.Gray)
                 }
             }
         )

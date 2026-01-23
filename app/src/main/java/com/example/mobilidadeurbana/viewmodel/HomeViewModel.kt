@@ -65,12 +65,6 @@ class HomeViewModel : ViewModel() {
     var hasBackgroundPermission = mutableStateOf(false)
         private set
 
-    var shouldShowPermissionRationale = mutableStateOf(false)
-        private set
-
-    var permissionDeniedPermanently = mutableStateOf(false)
-        private set
-
     private val _polylines = MutableStateFlow<List<Polyline>>(emptyList())
     val polylines: StateFlow<List<Polyline>> = _polylines.asStateFlow()
 
@@ -79,11 +73,16 @@ class HomeViewModel : ViewModel() {
 
     fun setStatus(novoStatus: String) {
         statusOnibus.value = novoStatus
+        Log.d("HOME_VM", "Status alterado para: $novoStatus")
     }
 
     fun selecionarRota(rota: Rota) {
-        rotaSelecionada.value = rota
-        Log.d("HOME_VM", "Rota selecionada: ${rota.nome} (${rota.codigo})")
+        if (!isTracking.value) {
+            rotaSelecionada.value = rota
+            Log.d("HOME_VM", "Rota selecionada: ${rota.nome} (${rota.codigo})")
+        } else {
+            Log.w("HOME_VM", "Não é possível mudar de rota durante o rastreamento")
+        }
     }
 
     /**
@@ -111,7 +110,7 @@ class HomeViewModel : ViewModel() {
             hasBackgroundPermission.value = true
         }
 
-        Log.d("HOME_VM", "Permissões: location=$fineLocation, background=${hasBackgroundPermission.value}")
+        Log.d("HOME_VM", "Permissões verificadas: location=${hasLocationPermission.value}, background=${hasBackgroundPermission.value}")
     }
 
     /**
@@ -128,24 +127,12 @@ class HomeViewModel : ViewModel() {
     }
 
     /**
-     * Define se deve mostrar justificativa de permissão
-     */
-    fun setShouldShowPermissionRationale(show: Boolean) {
-        shouldShowPermissionRationale.value = show
-    }
-
-    /**
-     * Define se a permissão foi negada permanentemente
-     */
-    fun setPermissionDeniedPermanently(denied: Boolean) {
-        permissionDeniedPermanently.value = denied
-    }
-
-    /**
      * Verifica se pode iniciar o rastreamento (todas as permissões concedidas)
      */
     fun canStartTracking(): Boolean {
-        return hasLocationPermission.value && hasBackgroundPermission.value
+        val canStart = hasLocationPermission.value && hasBackgroundPermission.value
+        Log.d("HOME_VM", "Pode iniciar tracking: $canStart (location=${hasLocationPermission.value}, background=${hasBackgroundPermission.value})")
+        return canStart
     }
 
     /**
@@ -172,9 +159,9 @@ class HomeViewModel : ViewModel() {
                 val novasPolylines = gerarPolylines(rotasCarregadas)
                 _polylines.value = novasPolylines
 
-                Log.d("HOME_VM", "Rotas carregadas: ${rotasCarregadas.size}")
+                Log.d("HOME_VM", "✓ ${rotasCarregadas.size} rotas carregadas")
             } catch (e: Exception) {
-                Log.e("HOME_VM", "Erro ao carregar rotas", e)
+                Log.e("HOME_VM", "✗ Erro ao carregar rotas", e)
             } finally {
                 _isLoading.value = false
             }
@@ -271,7 +258,6 @@ class HomeViewModel : ViewModel() {
 
             if (pontosValidos >= 2) {
                 novasLinhas.add(polyline)
-                Log.d("HOME_VM", "Polyline criada para ${rota.nome}: $pontosValidos pontos")
             }
         }
 
@@ -279,13 +265,27 @@ class HomeViewModel : ViewModel() {
     }
 
     fun startTracking(context: Context, lat: Double, lng: Double, velocidade: Float) {
+        Log.d("HOME_VM", "=== INICIANDO RASTREAMENTO ===")
+
+        // Verifica permissões
         if (!canStartTracking()) {
-            Log.w("HOME_VM", "Tentativa de iniciar rastreamento sem permissões adequadas")
+            Log.e("HOME_VM", "✗ Permissões insuficientes")
             return
         }
 
-        val rota = rotaSelecionada.value ?: return
+        // Verifica rota selecionada
+        val rota = rotaSelecionada.value
+        if (rota == null) {
+            Log.e("HOME_VM", "✗ Nenhuma rota selecionada")
+            return
+        }
 
+        Log.d("HOME_VM", "✓ Rota: ${rota.nome} (${rota.codigo})")
+        Log.d("HOME_VM", "✓ Status: ${statusOnibus.value}")
+        Log.d("HOME_VM", "✓ Localização: $lat, $lng")
+        Log.d("HOME_VM", "✓ Velocidade: $velocidade")
+
+        // Cria intent para o serviço
         val serviceIntent = Intent(context, LocationTrackingService::class.java).apply {
             action = LocationTrackingService.ACTION_START_TRACKING
             putExtra(LocationTrackingService.EXTRA_ROTA_CODIGO, rota.codigo)
@@ -295,28 +295,43 @@ class HomeViewModel : ViewModel() {
             putExtra(LocationTrackingService.EXTRA_VELOCIDADE, velocidade)
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(serviceIntent)
-        } else {
-            context.startService(serviceIntent)
-        }
+        try {
+            // Inicia o serviço
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(serviceIntent)
+            } else {
+                context.startService(serviceIntent)
+            }
 
-        isTracking.value = true
-        Log.d("HOME_VM", "Rastreamento iniciado via serviço na rota ${rota.codigo}")
+            // Atualiza estado
+            isTracking.value = true
+            Log.d("HOME_VM", "✓ Serviço iniciado com sucesso")
+
+        } catch (e: Exception) {
+            Log.e("HOME_VM", "✗ Erro ao iniciar serviço", e)
+            isTracking.value = false
+        }
     }
 
     fun stopTracking(context: Context) {
+        Log.d("HOME_VM", "=== PARANDO RASTREAMENTO ===")
+
         val serviceIntent = Intent(context, LocationTrackingService::class.java).apply {
             action = LocationTrackingService.ACTION_STOP_TRACKING
         }
-        context.startService(serviceIntent)
 
-        isTracking.value = false
-        Log.d("HOME_VM", "Rastreamento parado")
+        try {
+            context.startService(serviceIntent)
+            isTracking.value = false
+            Log.d("HOME_VM", "✓ Rastreamento parado")
+        } catch (e: Exception) {
+            Log.e("HOME_VM", "✗ Erro ao parar rastreamento", e)
+        }
     }
 
     override fun onCleared() {
         super.onCleared()
         _polylines.value = emptyList()
+        Log.d("HOME_VM", "ViewModel limpo")
     }
 }

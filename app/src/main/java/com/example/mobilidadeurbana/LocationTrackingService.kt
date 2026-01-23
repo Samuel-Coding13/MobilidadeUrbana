@@ -72,7 +72,8 @@ class LocationTrackingService : Service() {
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 result.lastLocation?.let { location ->
-                    updateLocationInDatabases(location)
+                    Log.d("LocationService", "Nova localização recebida: ${location.latitude}, ${location.longitude}")
+                    updateLocationAndVehicleInfo(location)
                 }
             }
         }
@@ -89,9 +90,11 @@ class LocationTrackingService : Service() {
                 val lng = intent.getDoubleExtra(EXTRA_LNG, 0.0)
                 val velocidade = intent.getFloatExtra(EXTRA_VELOCIDADE, 0f)
 
+                Log.d("LocationService", "Iniciando tracking: rota=$rotaCodigo, status=$statusOnibus")
                 startTracking(lat, lng, velocidade)
             }
             ACTION_STOP_TRACKING -> {
+                Log.d("LocationService", "Parando tracking")
                 stopTracking()
             }
         }
@@ -108,28 +111,28 @@ class LocationTrackingService : Service() {
         Log.d("LocationService", "Iniciando rastreamento")
         isTracking = true
 
+        // Inicia serviço em foreground
         startForeground(NOTIFICATION_ID, createNotification())
 
-        // Atualiza informações iniciais do veículo no Firestore
-        updateVehicleInfoInFirestore()
-
-        // Envia localização inicial para Realtime Database
+        // Envia informações iniciais
         val location = Location("initial").apply {
             latitude = lat
             longitude = lng
             speed = velocidade
         }
-        updateLocationInDatabases(location)
+        updateLocationAndVehicleInfo(location)
 
+        // Configura localização contínua
         val locationRequest = LocationRequest.Builder(
             Priority.PRIORITY_HIGH_ACCURACY,
-            2000L
+            2000L // Atualiza a cada 2 segundos
         ).apply {
-            setMinUpdateDistanceMeters(1f)
+            setMinUpdateDistanceMeters(1f) // Mínimo 1 metro
             setMaxUpdateDelayMillis(2000L)
             setWaitForAccurateLocation(false)
         }.build()
 
+        // Verifica permissões
         if (ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.ACCESS_FINE_LOCATION
@@ -140,6 +143,7 @@ class LocationTrackingService : Service() {
             return
         }
 
+        // Solicita atualizações de localização
         fusedLocationClient.requestLocationUpdates(
             locationRequest,
             locationCallback,
@@ -158,33 +162,35 @@ class LocationTrackingService : Service() {
         Log.d("LocationService", "Parando rastreamento")
         isTracking = false
 
+        // Para atualizações de localização
         fusedLocationClient.removeLocationUpdates(locationCallback)
 
         val user = auth.currentUser
         if (user != null) {
-            // Remove localização do Realtime Database
-            realtimeDatabase.getReference("localizacoes")
+            // Remove do Realtime Database
+            realtimeDatabase.getReference("onibus")
                 .child(user.uid)
                 .removeValue()
                 .addOnSuccessListener {
-                    Log.d("LocationService", "Localização removida do Realtime Database")
+                    Log.d("LocationService", "Dados removidos do Realtime Database")
                 }
                 .addOnFailureListener { e ->
-                    Log.e("LocationService", "Erro ao remover localização", e)
+                    Log.e("LocationService", "Erro ao remover do Realtime Database", e)
                 }
 
-            // Remove informações do veículo do Firestore
+            // Remove do Firestore
             firestore.collection("onibus")
                 .document(user.uid)
                 .delete()
                 .addOnSuccessListener {
-                    Log.d("LocationService", "Informações do veículo removidas do Firestore")
+                    Log.d("LocationService", "Dados removidos do Firestore")
                 }
                 .addOnFailureListener { e ->
-                    Log.e("LocationService", "Erro ao remover informações do veículo", e)
+                    Log.e("LocationService", "Erro ao remover do Firestore", e)
                 }
         }
 
+        // Para foreground service
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE)
         } else {
@@ -194,67 +200,68 @@ class LocationTrackingService : Service() {
         stopSelf()
     }
 
-    private fun updateLocationInDatabases(location: Location) {
+    private fun updateLocationAndVehicleInfo(location: Location) {
         val user = auth.currentUser
-        if (user == null || !isTracking) {
-            Log.w("LocationService", "Não pode atualizar: user=$user, tracking=$isTracking")
+        if (user == null || !isTracking || rotaCodigo == null) {
+            Log.w("LocationService", "Não pode atualizar: user=$user, tracking=$isTracking, rota=$rotaCodigo")
             return
         }
 
-        // Obtém o endereço em uma coroutine
         serviceScope.launch {
             val endereco = getAddressFromLocation(location.latitude, location.longitude)
 
-            // Atualiza localização no Realtime Database
-            val localizacaoData = hashMapOf<String, Any>(
+            // Dados completos para ambos os bancos
+            val timestamp = System.currentTimeMillis()
+
+            // REALTIME DATABASE - dados completos
+            val realtimeData = hashMapOf<String, Any>(
+                "uid" to user.uid,
+                "status" to statusOnibus,
+                "rotaCodigo" to rotaCodigo!!,
                 "lat" to location.latitude,
                 "lng" to location.longitude,
                 "localizacao" to endereco,
-                "timestamp" to ServerValue.TIMESTAMP,
-                "velocidade" to location.speed
+                "velocidade" to location.speed,
+                "timestamp" to ServerValue.TIMESTAMP
             )
 
-            realtimeDatabase.getReference("localizacoes")
+            realtimeDatabase.getReference("onibus")
                 .child(user.uid)
-                .setValue(localizacaoData)
+                .setValue(realtimeData)
                 .addOnSuccessListener {
-                    Log.d("LocationService", "Localização atualizada no Realtime Database: $endereco")
+                    Log.d("LocationService", "✓ Realtime Database atualizado")
                 }
                 .addOnFailureListener { e ->
-                    Log.e("LocationService", "Erro ao atualizar localização no Realtime Database", e)
+                    Log.e("LocationService", "✗ Erro no Realtime Database", e)
+                }
+
+            // FIRESTORE - dados do veículo
+            val firestoreData = hashMapOf<String, Any>(
+                "uid" to user.uid,
+                "status" to statusOnibus,
+                "rotaCodigo" to rotaCodigo!!,
+                "lat" to location.latitude,
+                "lng" to location.longitude,
+                "localizacao" to endereco,
+                "velocidade" to location.speed,
+                "timestamp" to com.google.firebase.Timestamp.now()
+            )
+
+            firestore.collection("onibus")
+                .document(user.uid)
+                .set(firestoreData)
+                .addOnSuccessListener {
+                    Log.d("LocationService", "✓ Firestore atualizado")
+                }
+                .addOnFailureListener { e ->
+                    Log.e("LocationService", "✗ Erro no Firestore", e)
                 }
         }
-    }
-
-    private fun updateVehicleInfoInFirestore() {
-        val user = auth.currentUser
-        if (user == null || rotaCodigo == null) {
-            Log.w("LocationService", "Não pode atualizar Firestore: user=$user, rota=$rotaCodigo")
-            return
-        }
-
-        val vehicleInfo = hashMapOf<String, Any>(
-            "uid" to user.uid,
-            "status" to statusOnibus,
-            "rotaCodigo" to rotaCodigo!!,
-            "timestamp" to com.google.firebase.Timestamp.now()
-        )
-
-        firestore.collection("onibus")
-            .document(user.uid)
-            .set(vehicleInfo)
-            .addOnSuccessListener {
-                Log.d("LocationService", "Informações do veículo atualizadas no Firestore")
-            }
-            .addOnFailureListener { e ->
-                Log.e("LocationService", "Erro ao atualizar informações no Firestore", e)
-            }
     }
 
     private fun getAddressFromLocation(latitude: Double, longitude: Double): String {
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                // API 33+ usa callback assíncrono
                 var addressText = "Localização: $latitude, $longitude"
                 val geocodeListener = Geocoder.GeocodeListener { addresses ->
                     if (addresses.isNotEmpty()) {
@@ -264,7 +271,6 @@ class LocationTrackingService : Service() {
                 geocoder.getFromLocation(latitude, longitude, 1, geocodeListener)
                 addressText
             } else {
-                // API < 33 usa método síncrono (deprecated mas necessário)
                 @Suppress("DEPRECATION")
                 val addresses: List<Address>? = geocoder.getFromLocation(latitude, longitude, 1)
                 if (!addresses.isNullOrEmpty()) {
